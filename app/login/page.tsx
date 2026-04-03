@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Wind, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
-  const router = useRouter();
+  
   const supabase = createClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,8 +30,8 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/dashboard");
-    router.refresh();
+    window.location.href = "/dashboard/";
+    
   };
 
   return (
