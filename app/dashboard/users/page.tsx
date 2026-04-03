@@ -1,13 +1,34 @@
+"use client";
 
-import { createClient } from "@/lib/supabase/server";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { Plus, Shield, Eye } from "lucide-react";
+import { useRouter } from "next/navigation";
 
-export default async function UsersPage() {
-  const supabase = await createClient();
+type Access = {
+  id: string;
+  sites: { name: string; site_number: string } | null;
+  role: string;
+  granted_at: string;
+};
 
-  const { data: accesses } = await supabase
-    .from("user_site_access")
-    .select("*, sites(name, site_number)");
+export default function UsersPage() {
+  const [accesses, setAccesses] = useState<Access[]>([]);
+  const supabase = createClient();
+  const router = useRouter();
+
+  useEffect(() => {
+    async function fetchData() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return router.push("/login");
+
+      const { data } = await supabase
+        .from("user_site_access")
+        .select("*, sites(name, site_number)");
+      if (data) setAccesses(data as Access[]);
+    }
+    fetchData();
+  }, [router, supabase]);
 
   return (
     <div className="space-y-6">
@@ -36,7 +57,7 @@ export default async function UsersPage() {
             <Eye className="w-4 h-4 text-purple-400" />
             <span className="text-xs text-slate-400">클라이언트</span>
           </div>
-          <p className="text-2xl font-bold text-white">{(accesses ?? []).filter((a: { role: string }) => a.role === "viewer").length}</p>
+          <p className="text-2xl font-bold text-white">{accesses.filter((a) => a.role === "viewer").length}</p>
           <p className="text-xs text-slate-500 mt-1">지정 사이트만 접근</p>
         </div>
       </div>
@@ -54,14 +75,14 @@ export default async function UsersPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/40">
-            {(accesses ?? []).length === 0 ? (
+            {accesses.length === 0 ? (
               <tr>
                 <td colSpan={3} className="px-4 py-8 text-center text-sm text-slate-500">
                   권한 데이터가 없습니다
                 </td>
               </tr>
             ) : (
-              (accesses ?? []).map((a: { id: string; sites: { name: string; site_number: string } | null; role: string; granted_at: string }) => (
+              accesses.map((a) => (
                 <tr key={a.id} className="hover:bg-slate-800/20 transition-colors">
                   <td className="px-4 py-3 text-sm text-white">
                     {a.sites ? `${a.sites.name} (${a.sites.site_number})` : "-"}

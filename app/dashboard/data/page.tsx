@@ -1,15 +1,30 @@
+"use client";
 
-import { createClient } from "@/lib/supabase/server";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { Upload, RefreshCw, CheckCircle, XCircle, Clock } from "lucide-react";
 import type { UploadHistory } from "@/lib/types";
+import { useRouter } from "next/navigation";
 
-export default async function DataPage() {
-  const supabase = await createClient();
-  const { data: uploads } = await supabase
-    .from("upload_history")
-    .select("*, sites(name)")
-    .order("created_at", { ascending: false })
-    .limit(50);
+export default function DataPage() {
+  const [uploads, setUploads] = useState<(UploadHistory & { sites: { name: string } | null })[]>([]);
+  const supabase = createClient();
+  const router = useRouter();
+
+  useEffect(() => {
+    async function fetchData() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return router.push("/login");
+
+      const { data } = await supabase
+        .from("upload_history")
+        .select("*, sites(name)")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (data) setUploads(data);
+    }
+    fetchData();
+  }, [router, supabase]);
 
   const statusIcon = (status: string) => {
     if (status === "success") return <CheckCircle className="w-4 h-4 text-green-400" />;
@@ -79,14 +94,14 @@ export default async function DataPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/40">
-            {(uploads ?? []).length === 0 ? (
+            {uploads.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
                   업로드 이력이 없습니다
                 </td>
               </tr>
             ) : (
-              (uploads ?? []).map((u: UploadHistory & { sites: { name: string } | null }) => (
+              uploads.map((u) => (
                 <tr key={u.id} className="hover:bg-slate-800/20 transition-colors">
                   <td className="px-4 py-3">{statusIcon(u.status)}</td>
                   <td className="px-4 py-3 text-xs font-mono text-slate-300">{u.file_name ?? "-"}</td>

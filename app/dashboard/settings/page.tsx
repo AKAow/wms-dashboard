@@ -1,3 +1,5 @@
+"use client";
+
 import { Settings, Key, Mail, Globe } from "lucide-react";
 
 export default function SettingsPage() {

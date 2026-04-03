@@ -1,28 +1,37 @@
+"use client";
 
-import { createClient } from "@/lib/supabase/server";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { MapPin, Activity, RefreshCw, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import type { Site, UploadHistory } from "@/lib/types";
+import { useRouter } from "next/navigation";
 
-export default async function DashboardPage() {
-  const supabase = await createClient();
+export default function DashboardPage() {
+  const [sites, setSites] = useState<Site[]>([]);
+  const [uploads, setUploads] = useState<UploadHistory[]>([]);
+  const supabase = createClient();
+  const router = useRouter();
 
-  const { data: sites } = await supabase
-    .from("sites")
-    .select("*")
-    .order("name");
+  useEffect(() => {
+    async function fetchData() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return router.push("/login");
 
-  const { data: uploads } = await supabase
-    .from("upload_history")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(5);
+      const { data: s } = await supabase.from("sites").select("*").order("name");
+      const { data: u } = await supabase.from("upload_history").select("*").order("created_at", { ascending: false }).limit(5);
 
-  const activeSites = (sites ?? []).filter((s: Site) => s.is_active).length;
-  const lastUpload = (uploads ?? [])[0];
+      if (s) setSites(s);
+      if (u) setUploads(u);
+    }
+    fetchData();
+  }, [router, supabase]);
+
+  const activeSites = sites.filter((s) => s.is_active).length;
+  const lastUpload = uploads[0];
 
   const stats = [
-    { label: "전체 사이트", value: (sites ?? []).length, icon: MapPin, color: "text-blue-400", bg: "bg-blue-400/10" },
+    { label: "전체 사이트", value: sites.length, icon: MapPin, color: "text-blue-400", bg: "bg-blue-400/10" },
     { label: "활성 사이트", value: activeSites, icon: Activity, color: "text-green-400", bg: "bg-green-400/10" },
     { label: "최근 업데이트", value: lastUpload ? new Date(lastUpload.created_at).toLocaleDateString("ko") : "없음", icon: RefreshCw, color: "text-purple-400", bg: "bg-purple-400/10" },
   ];
@@ -56,7 +65,7 @@ export default async function DashboardPage() {
           <h2 className="text-sm font-semibold text-white">사이트 목록</h2>
         </div>
         <div className="divide-y divide-slate-800/40">
-          {(sites ?? []).length === 0 ? (
+          {sites.length === 0 ? (
             <div className="p-8 text-center">
               <AlertCircle className="w-8 h-8 text-slate-600 mx-auto mb-3" />
               <p className="text-sm text-slate-500">등록된 사이트가 없습니다</p>
@@ -65,7 +74,7 @@ export default async function DashboardPage() {
               </Link>
             </div>
           ) : (
-            (sites ?? []).map((site: Site) => (
+            sites.map((site) => (
               <Link
                 key={site.id}
                 href={`/dashboard/sites/${site.id}`}
@@ -100,10 +109,10 @@ export default async function DashboardPage() {
           <Link href="/dashboard/data" className="text-xs text-blue-400 hover:underline">전체 보기</Link>
         </div>
         <div className="divide-y divide-slate-800/40">
-          {(uploads ?? []).length === 0 ? (
+          {uploads.length === 0 ? (
             <div className="p-6 text-center text-sm text-slate-500">업로드 이력이 없습니다</div>
           ) : (
-            (uploads ?? []).map((u: UploadHistory) => (
+            uploads.map((u) => (
               <div key={u.id} className="flex items-center justify-between px-4 py-3">
                 <div>
                   <p className="text-sm text-white">{u.file_name ?? "이름 없음"}</p>
