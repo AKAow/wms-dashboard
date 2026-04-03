@@ -1,18 +1,62 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { MapPin, Activity, Wind, Navigation, BarChart2 } from "lucide-react";
+import { MapPin, Activity, Wind, Navigation, BarChart2, Table2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from "recharts";
 import type { Site, DailyStat, Measurement } from "@/lib/types";
 import { CHANNEL_LABELS } from "@/lib/types";
 
 type Tab = "overview" | "daily" | "monthly";
 
+const DAILY_CHANNEL_OPTIONS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch13", "ch22"];
+const MONTHLY_CHANNEL_OPTIONS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch22"];
+const CHART_COLORS: Record<string, string> = {
+  ch1: "#3b82f6",
+  ch2: "#06b6d4",
+  ch3: "#8b5cf6",
+  ch4: "#ec4899",
+  ch5: "#22c55e",
+  ch13: "#f59e0b",
+  ch22: "#ef4444",
+};
+
+const formatKSTDate = (date = new Date()) => {
+  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().slice(0, 10);
+};
+
+const formatKSTMonth = (date = new Date()) => {
+  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().slice(0, 7);
+};
+
+const toKSTLabel = (timestamp: string) => {
+  const d = new Date(timestamp);
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+};
+
+const toKSTDateOnly = (timestamp: string) => {
+  const d = new Date(timestamp);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+};
+
 export default function SiteDetail({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [selectedDate, setSelectedDate] = useState(formatKSTDate());
+  const [selectedMonth, setSelectedMonth] = useState(formatKSTMonth());
+  const [dailyChannel, setDailyChannel] = useState("ch1");
+  const [monthlyChannel, setMonthlyChannel] = useState("ch1");
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [loading, setLoading] = useState(false);
@@ -20,10 +64,14 @@ export default function SiteDetail({ site }: { site: Site }) {
 
   const loadMeasurements = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from("measurements").select("*")
+    const startUtc = new Date(`${selectedDate}T00:00:00+09:00`).toISOString();
+    const endUtc = new Date(`${selectedDate}T23:59:59+09:00`).toISOString();
+    const { data } = await supabase
+      .from("measurements")
+      .select("*")
       .eq("site_id", site.id)
-      .gte("timestamp", `${selectedDate}T00:00:00`)
-      .lte("timestamp", `${selectedDate}T23:59:59`)
+      .gte("timestamp", startUtc)
+      .lte("timestamp", endUtc)
       .order("timestamp");
     setMeasurements(data ?? []);
     setLoading(false);
@@ -33,107 +81,199 @@ export default function SiteDetail({ site }: { site: Site }) {
     setLoading(true);
     const [year, month] = selectedMonth.split("-");
     const end = new Date(parseInt(year), parseInt(month), 0).toISOString().split("T")[0];
-    const { data } = await supabase.from("daily_stats").select("*")
+    const { data } = await supabase
+      .from("daily_stats")
+      .select("*")
       .eq("site_id", site.id)
       .gte("date", `${year}-${month}-01`)
       .lte("date", end)
-      .order("date");
+      .order("date")
+      .order("channel");
     setDailyStats(data ?? []);
     setLoading(false);
   }, [selectedMonth, site.id, supabase]);
 
-  useEffect(() => { if (tab === "daily") loadMeasurements(); }, [tab, selectedDate, loadMeasurements]);
-  useEffect(() => { if (tab === "monthly") loadMonthlyStats(); }, [tab, selectedMonth, loadMonthlyStats]);
+  useEffect(() => {
+    if (tab === "daily") loadMeasurements();
+  }, [tab, selectedDate, loadMeasurements]);
 
-  const chartData = measurements.map((m) => ({
-    time: new Date(m.timestamp).toLocaleTimeString("ko", { hour: "2-digit", minute: "2-digit" }),
-    "100m": m.ch1, "96m": m.ch2, "80m": m.ch3, "풍향": m.ch13,
+  useEffect(() => {
+    if (tab === "monthly" || tab === "overview") loadMonthlyStats();
+  }, [tab, selectedMonth, loadMonthlyStats]);
+
+  const dailyChartData = useMemo(() => {
+    return measurements
+      .filter((m) => toKSTDateOnly(m.timestamp) === selectedDate)
+      .map((m) => ({
+        time: toKSTLabel(m.timestamp),
+        value: m[dailyChannel as keyof Measurement] as number | null,
+      }))
+      .filter((row) => row.value !== null);
+  }, [measurements, selectedDate, dailyChannel]);
+
+  const dailyTableRows = useMemo(() => {
+    return measurements
+      .filter((m) => toKSTDateOnly(m.timestamp) === selectedDate)
+      .map((m) => ({
+        time: toKSTLabel(m.timestamp),
+        ch1: m.ch1,
+        ch2: m.ch2,
+        ch3: m.ch3,
+        ch13: m.ch13,
+        ch22: m.ch22,
+      }));
+  }, [measurements, selectedDate]);
+
+  const monthlyChannelStats = useMemo(() => {
+    return dailyStats.filter((s) => s.channel === monthlyChannel);
+  }, [dailyStats, monthlyChannel]);
+
+  const monthlyChartData = useMemo(() => {
+    return monthlyChannelStats.map((s) => ({
+      date: s.date.slice(5),
+      avg: s.avg_value ?? 0,
+      max: s.max_value ?? 0,
+      min: s.min_value ?? 0,
+    }));
+  }, [monthlyChannelStats]);
+
+  const overviewMonthlyPreview = useMemo(() => {
+    return dailyStats
+      .filter((s) => ["ch1", "ch2", "ch3"].includes(s.channel))
+      .reduce<Record<string, Record<string, number>>>((acc, s) => {
+        if (!acc[s.date]) acc[s.date] = {};
+        acc[s.date][s.channel] = s.avg_value ?? 0;
+        return acc;
+      }, {});
+  }, [dailyStats]);
+
+  const overviewChartData = Object.entries(overviewMonthlyPreview).map(([date, vals]) => ({
+    date: date.slice(5),
+    ch1: vals.ch1 ?? 0,
+    ch2: vals.ch2 ?? 0,
+    ch3: vals.ch3 ?? 0,
   }));
-
-  const monthlyChartData = (() => {
-    const byDate: Record<string, Record<string, number>> = {};
-    dailyStats.forEach((s) => { if (!byDate[s.date]) byDate[s.date] = {}; byDate[s.date][s.channel] = s.avg_value ?? 0; });
-    return Object.entries(byDate).map(([date, vals]) => ({ date: date.slice(5), "100m": vals["ch1"] ?? 0, "96m": vals["ch2"] ?? 0, "80m": vals["ch3"] ?? 0 }));
-  })();
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <div className="flex items-center gap-2 mb-1"><MapPin className="w-4 h-4 text-blue-400" /><h1 className="text-2xl font-bold text-white">{site.name}</h1></div>
-          <p className="text-sm text-slate-400">{site.site_number} · {site.location_name}</p>
+          <p className="text-sm text-slate-400">{site.site_number} · {site.location_name ?? "위치 미입력"}</p>
         </div>
         <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full ${site.is_active ? "bg-green-400/10 text-green-400" : "bg-slate-700 text-slate-400"}`}>
           <Activity className="w-3 h-3" />{site.is_active ? "활성" : "비활성"}
         </span>
       </div>
 
-      <div className="flex gap-1 bg-[#020617] rounded-xl p-1 w-fit border border-slate-800/60">
-        {(["overview","daily","monthly"] as Tab[]).map((key) => (
+      <div className="flex gap-1 bg-[#020617] rounded-xl p-1 w-fit border border-slate-800/60 overflow-x-auto">
+        {(["overview", "daily", "monthly"] as Tab[]).map((key) => (
           <button key={key} onClick={() => setTab(key)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === key ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"}`}>
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${tab === key ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"}`}>
             {key === "overview" ? "Overview" : key === "daily" ? "일별 데이터" : "월별 통계"}
           </button>
         ))}
       </div>
 
       {tab === "overview" && (
-        <div className="grid grid-cols-2 gap-4">
-          <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-400" />사이트 정보</h3>
-            <div className="space-y-3 text-sm">
-              {[["사이트 번호",site.site_number],["위치명",site.location_name??"-"],["위도",site.latitude?`${site.latitude}° N`:"-"],["경도",site.longitude?`${site.longitude}° E`:"-"],["고도",site.elevation?`${site.elevation} m`:"-"],["iPack",site.ipack_email??"-"]].map(([l,v])=>(
-                <div key={l} className="flex justify-between"><span className="text-slate-500">{l}</span><span className="text-slate-200 font-mono text-xs">{v}</span></div>
-              ))}
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5 space-y-4">
+              <h3 className="text-sm font-semibold text-white flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-400" />사이트 정보</h3>
+              <div className="space-y-3 text-sm">
+                {[["사이트 번호", site.site_number], ["위치명", site.location_name ?? "-"], ["위도", site.latitude ? `${site.latitude}° N` : "-"], ["경도", site.longitude ? `${site.longitude}° E` : "-"], ["고도", site.elevation ? `${site.elevation} m` : "-"], ["iPack", site.ipack_email ?? "-"]].map(([l, v]) => (
+                  <div key={l} className="flex justify-between gap-4"><span className="text-slate-500">{l}</span><span className="text-slate-200 font-mono text-xs text-right">{v}</span></div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5 space-y-4">
+              <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400" />센서 구성</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {Object.entries(CHANNEL_LABELS).map(([ch, label]) => (
+                  <div key={ch} className="flex items-center gap-2 text-xs"><span className="text-blue-400 font-mono w-8">{ch}</span><span className="text-slate-400">{label}</span></div>
+                ))}
+              </div>
             </div>
           </div>
-          <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400" />센서 구성</h3>
-            <div className="space-y-2">
-              {Object.entries(CHANNEL_LABELS).map(([ch,label])=>(
-                <div key={ch} className="flex items-center gap-2 text-xs"><span className="text-blue-400 font-mono w-8">{ch}</span><span className="text-slate-400">{label}</span></div>
-              ))}
-            </div>
+
+          <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
+            <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />엑셀 기준 월간 풍속 비교 미리보기</h3>
+            {overviewChartData.length === 0 ? (
+              <div className="text-sm text-slate-500 py-10 text-center">월간 데이터가 없습니다</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={overviewChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
+                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
+                  <Tooltip contentStyle={{ backgroundColor: "#0b111d", border: "1px solid #1e293b", borderRadius: "8px", color: "#f8fafc" }} />
+                  <Legend wrapperStyle={{ fontSize: "12px" }} />
+                  <Line type="monotone" dataKey="ch1" name="100m 풍속" stroke={CHART_COLORS.ch1} dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey="ch2" name="96m 풍속" stroke={CHART_COLORS.ch2} dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey="ch3" name="80m 풍속" stroke={CHART_COLORS.ch3} dot={false} strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       )}
 
       {tab === "daily" && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-slate-400">날짜 선택</label>
-            <input type="date" value={selectedDate} onChange={(e)=>setSelectedDate(e.target.value)}
-              className="rounded-xl border border-slate-700/80 bg-[#020617] px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"/>
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-slate-400">날짜</label>
+              <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="rounded-xl border border-slate-700/80 bg-[#020617] px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none" />
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-slate-400">항목</label>
+              <select value={dailyChannel} onChange={(e) => setDailyChannel(e.target.value)} className="rounded-xl border border-slate-700/80 bg-[#020617] px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none">
+                {DAILY_CHANNEL_OPTIONS.map((ch) => <option key={ch} value={ch}>{CHANNEL_LABELS[ch]}</option>)}
+              </select>
+            </div>
           </div>
+
           {loading ? <div className="text-center py-12 text-slate-500 text-sm">로딩 중...</div>
-          : chartData.length===0 ? <div className="text-center py-12 text-slate-500 text-sm rounded-xl border border-slate-800/60 bg-[#0b111d]">해당 날짜의 데이터가 없습니다</div>
+          : dailyChartData.length === 0 ? <div className="text-center py-12 text-slate-500 text-sm rounded-xl border border-slate-800/60 bg-[#0b111d]">해당 날짜의 데이터가 없습니다</div>
           : <>
             <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
-              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400"/>풍속 시계열 (m/s)</h3>
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b"/>
-                  <XAxis dataKey="time" tick={{fontSize:11,fill:"#64748b"}} interval={17}/>
-                  <YAxis tick={{fontSize:11,fill:"#64748b"}} unit=" m/s"/>
-                  <Tooltip contentStyle={{backgroundColor:"#0b111d",border:"1px solid #1e293b",borderRadius:"8px",color:"#f8fafc"}}/>
-                  <Legend wrapperStyle={{fontSize:"12px"}}/>
-                  <Line type="monotone" dataKey="100m" stroke="#3b82f6" dot={false} strokeWidth={1.5}/>
-                  <Line type="monotone" dataKey="96m" stroke="#06b6d4" dot={false} strokeWidth={1.5}/>
-                  <Line type="monotone" dataKey="80m" stroke="#8b5cf6" dot={false} strokeWidth={1.5}/>
+              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400" />{CHANNEL_LABELS[dailyChannel]} 시계열</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={dailyChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="time" tick={{ fontSize: 11, fill: "#64748b" }} interval={17} />
+                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
+                  <Tooltip contentStyle={{ backgroundColor: "#0b111d", border: "1px solid #1e293b", borderRadius: "8px", color: "#f8fafc" }} />
+                  <Line type="monotone" dataKey="value" name={CHANNEL_LABELS[dailyChannel]} stroke={CHART_COLORS[dailyChannel] ?? "#3b82f6"} dot={false} strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
-              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400"/>풍향 (97m)</h3>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b"/>
-                  <XAxis dataKey="time" tick={{fontSize:11,fill:"#64748b"}} interval={17}/>
-                  <YAxis tick={{fontSize:11,fill:"#64748b"}} unit="°" domain={[0,360]}/>
-                  <Tooltip contentStyle={{backgroundColor:"#0b111d",border:"1px solid #1e293b",borderRadius:"8px",color:"#f8fafc"}}/>
-                  <Line type="monotone" dataKey="풍향" stroke="#f59e0b" dot={false} strokeWidth={1.5}/>
-                </LineChart>
-              </ResponsiveContainer>
+
+            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] overflow-hidden">
+              <div className="p-4 border-b border-slate-800/60 flex items-center gap-2 text-white text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />일별 수치 데이터 (KST)</div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px]">
+                  <thead>
+                    <tr className="border-b border-slate-800/40">
+                      {["시간", "100m 풍속", "96m 풍속", "80m 풍속", "97m 풍향", "온도"].map((h) => (
+                        <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/40">
+                    {dailyTableRows.map((row, i) => (
+                      <tr key={i} className="hover:bg-slate-800/20 transition-colors">
+                        <td className="px-4 py-2.5 text-xs text-slate-300 font-mono">{row.time}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.ch1 ?? "-"}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.ch2 ?? "-"}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.ch3 ?? "-"}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.ch13 ?? "-"}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.ch22 ?? "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </>}
         </div>
@@ -141,28 +281,65 @@ export default function SiteDetail({ site }: { site: Site }) {
 
       {tab === "monthly" && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-slate-400">월 선택</label>
-            <input type="month" value={selectedMonth} onChange={(e)=>setSelectedMonth(e.target.value)}
-              className="rounded-xl border border-slate-700/80 bg-[#020617] px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"/>
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-slate-400">월</label>
+              <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="rounded-xl border border-slate-700/80 bg-[#020617] px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none" />
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-slate-400">항목</label>
+              <select value={monthlyChannel} onChange={(e) => setMonthlyChannel(e.target.value)} className="rounded-xl border border-slate-700/80 bg-[#020617] px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none">
+                {MONTHLY_CHANNEL_OPTIONS.map((ch) => <option key={ch} value={ch}>{CHANNEL_LABELS[ch]}</option>)}
+              </select>
+            </div>
           </div>
+
           {loading ? <div className="text-center py-12 text-slate-500 text-sm">로딩 중...</div>
-          : monthlyChartData.length===0 ? <div className="text-center py-12 text-slate-500 text-sm rounded-xl border border-slate-800/60 bg-[#0b111d]">해당 월의 데이터가 없습니다</div>
-          : <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
-              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400"/>일별 평균 풍속 (m/s)</h3>
-              <ResponsiveContainer width="100%" height={300}>
+          : monthlyChartData.length === 0 ? <div className="text-center py-12 text-slate-500 text-sm rounded-xl border border-slate-800/60 bg-[#0b111d]">해당 월의 데이터가 없습니다</div>
+          : <>
+            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
+              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />{CHANNEL_LABELS[monthlyChannel]} 월간 통계</h3>
+              <ResponsiveContainer width="100%" height={320}>
                 <BarChart data={monthlyChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b"/>
-                  <XAxis dataKey="date" tick={{fontSize:11,fill:"#64748b"}}/>
-                  <YAxis tick={{fontSize:11,fill:"#64748b"}} unit=" m/s"/>
-                  <Tooltip contentStyle={{backgroundColor:"#0b111d",border:"1px solid #1e293b",borderRadius:"8px",color:"#f8fafc"}}/>
-                  <Legend wrapperStyle={{fontSize:"12px"}}/>
-                  <Bar dataKey="100m" fill="#3b82f6" radius={[2,2,0,0]}/>
-                  <Bar dataKey="96m" fill="#06b6d4" radius={[2,2,0,0]}/>
-                  <Bar dataKey="80m" fill="#8b5cf6" radius={[2,2,0,0]}/>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
+                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
+                  <Tooltip contentStyle={{ backgroundColor: "#0b111d", border: "1px solid #1e293b", borderRadius: "8px", color: "#f8fafc" }} />
+                  <Legend wrapperStyle={{ fontSize: "12px" }} />
+                  <Bar dataKey="avg" name="평균" fill={CHART_COLORS[monthlyChannel] ?? "#3b82f6"} radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="max" name="최대" fill="#22c55e" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="min" name="최소" fill="#ef4444" radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            </div>}
+            </div>
+
+            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] overflow-hidden">
+              <div className="p-4 border-b border-slate-800/60 flex items-center gap-2 text-white text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />월별 통계 수치</div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px]">
+                  <thead>
+                    <tr className="border-b border-slate-800/40">
+                      {["날짜", "평균", "최대", "최소", "표준편차", "데이터수"].map((h) => (
+                        <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/40">
+                    {monthlyChannelStats.map((row) => (
+                      <tr key={`${row.date}-${row.channel}`} className="hover:bg-slate-800/20 transition-colors">
+                        <td className="px-4 py-2.5 text-xs text-slate-300 font-mono">{row.date}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.avg_value ?? "-"}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.max_value ?? "-"}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.min_value ?? "-"}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.std_value ?? "-"}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.data_count ?? "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>}
         </div>
       )}
     </div>

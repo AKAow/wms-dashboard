@@ -38,7 +38,6 @@ export default function DataPage() {
         <p className="text-sm text-slate-400 mt-1">데이터 적재 현황 및 자동 동기화 상태</p>
       </div>
 
-      {/* 동기화 상태 카드 */}
       <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
         <div className="flex items-center gap-3 mb-3">
           <div className="p-2 rounded-lg bg-blue-400/10"><RefreshCw className="w-5 h-5 text-blue-400" /></div>
@@ -48,10 +47,10 @@ export default function DataPage() {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4 text-sm mt-4">
-          {[["연동 계정","windtreeeng@gmail.com"],["동기화 주기","주 1회 (일요일 06:00)"],["마지막 실행", uploads[0] ? new Date(uploads[0].created_at).toLocaleString("ko") : "-"],["상태","활성"]].map(([l,v]) => (
+          {[["연동 계정", "windtreeeng@gmail.com"], ["동기화 주기", "주 1회 (수요일 06:00)"], ["마지막 실행", uploads[0] ? new Date(uploads[0].created_at).toLocaleString("ko") : "-"], ["상태", "활성"]].map(([l, v]) => (
             <div key={l}>
               <p className="text-xs text-slate-500 mb-0.5">{l}</p>
-              <p className={`text-sm ${l==="상태"?"text-green-400 font-medium":"text-slate-300"}`}>{v}</p>
+              <p className={`text-sm ${l === "상태" ? "text-green-400 font-medium" : "text-slate-300"}`}>{v}</p>
             </div>
           ))}
         </div>
@@ -60,7 +59,6 @@ export default function DataPage() {
         </p>
       </div>
 
-      {/* 업로드 이력 */}
       <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] overflow-hidden">
         <div className="p-4 border-b border-slate-800/60 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-white">업로드 이력</h2>
@@ -70,7 +68,7 @@ export default function DataPage() {
           <table className="w-full min-w-[560px]">
             <thead>
               <tr className="border-b border-slate-800/40">
-                {["상태","파일명","사이트","날짜","건수","일시"].map((h,i) => (
+                {["상태", "파일명", "사이트", "날짜", "건수", "일시"].map((h, i) => (
                   <th key={i} className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
