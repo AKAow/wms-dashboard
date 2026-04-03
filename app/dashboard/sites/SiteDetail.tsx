@@ -9,8 +9,9 @@ import { CHANNEL_LABELS } from "@/lib/types";
 
 type Tab = "overview" | "daily" | "monthly";
 
-const DAILY_CHANNEL_OPTIONS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch13", "ch22"];
+const DAILY_CHANNEL_OPTIONS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"];
 const MONTHLY_CHANNEL_OPTIONS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch22"];
+const EXCEL_DAILY_TABLE_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"] as const;
 const CHART_COLORS: Record<string, string> = {
   ch1: "#3b82f6",
   ch2: "#06b6d4",
@@ -21,14 +22,29 @@ const CHART_COLORS: Record<string, string> = {
   ch22: "#ef4444",
 };
 
+const getKSTParts = (date = new Date()) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const year = parts.find((p) => p.type === "year")?.value ?? "0000";
+  const month = parts.find((p) => p.type === "month")?.value ?? "01";
+  const day = parts.find((p) => p.type === "day")?.value ?? "01";
+
+  return { year, month, day };
+};
+
 const formatKSTDate = (date = new Date()) => {
-  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
-  return kst.toISOString().slice(0, 10);
+  const { year, month, day } = getKSTParts(date);
+  return `${year}-${month}-${day}`;
 };
 
 const formatKSTMonth = (date = new Date()) => {
-  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
-  return kst.toISOString().slice(0, 7);
+  const { year, month } = getKSTParts(date);
+  return `${year}-${month}`;
 };
 
 const toKSTLabel = (timestamp: string) => {
@@ -42,13 +58,8 @@ const toKSTLabel = (timestamp: string) => {
 };
 
 const toKSTDateOnly = (timestamp: string) => {
-  const d = new Date(timestamp);
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(d);
+  const { year, month, day } = getKSTParts(new Date(timestamp));
+  return `${year}-${month}-${day}`;
 };
 
 export default function SiteDetail({ site }: { site: Site }) {
@@ -116,11 +127,10 @@ export default function SiteDetail({ site }: { site: Site }) {
       .filter((m) => toKSTDateOnly(m.timestamp) === selectedDate)
       .map((m) => ({
         time: toKSTLabel(m.timestamp),
-        ch1: m.ch1,
-        ch2: m.ch2,
-        ch3: m.ch3,
-        ch13: m.ch13,
-        ch22: m.ch22,
+        values: EXCEL_DAILY_TABLE_CHANNELS.reduce<Record<string, number | null>>((acc, ch) => {
+          acc[ch] = m[ch as keyof Measurement] as number | null;
+          return acc;
+        }, {}),
       }));
   }, [measurements, selectedDate]);
 
@@ -252,11 +262,12 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] overflow-hidden">
               <div className="p-4 border-b border-slate-800/60 flex items-center gap-2 text-white text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />일별 수치 데이터 (KST)</div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px]">
+                <table className="w-full min-w-[1600px]">
                   <thead>
                     <tr className="border-b border-slate-800/40">
-                      {["시간", "100m 풍속", "96m 풍속", "80m 풍속", "97m 풍향", "온도"].map((h) => (
-                        <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">시간</th>
+                      {EXCEL_DAILY_TABLE_CHANNELS.map((ch) => (
+                        <th key={ch} className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{CHANNEL_LABELS[ch]}</th>
                       ))}
                     </tr>
                   </thead>
@@ -264,11 +275,9 @@ export default function SiteDetail({ site }: { site: Site }) {
                     {dailyTableRows.map((row, i) => (
                       <tr key={i} className="hover:bg-slate-800/20 transition-colors">
                         <td className="px-4 py-2.5 text-xs text-slate-300 font-mono">{row.time}</td>
-                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.ch1 ?? "-"}</td>
-                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.ch2 ?? "-"}</td>
-                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.ch3 ?? "-"}</td>
-                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.ch13 ?? "-"}</td>
-                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.ch22 ?? "-"}</td>
+                        {EXCEL_DAILY_TABLE_CHANNELS.map((ch) => (
+                          <td key={`${i}-${ch}`} className="px-4 py-2.5 text-xs text-slate-300">{row.values[ch] ?? "-"}</td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>
