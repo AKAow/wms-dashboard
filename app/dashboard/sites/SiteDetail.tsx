@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { MapPin, Activity, Wind, Navigation, BarChart2, Table2, CalendarDays } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import * as XLSX from "xlsx";
 import type { Site, DailyStat, Measurement } from "@/lib/types";
 import { CHANNEL_LABELS } from "@/lib/types";
 
@@ -346,26 +347,17 @@ export default function SiteDetail({ site }: { site: Site }) {
     const rows = excelMonthlyTable.rows.map((row) => [
       EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch],
       EXCEL_SENSOR_META[row.ch]?.height ?? "-",
-      ...row.dayValues.map((v) => toFixedOrDash(v, 2)),
-      toFixedOrDash(row.ave, 2),
-      toFixedOrDash(row.max, 2),
-      toFixedOrDash(row.min, 2),
-      toFixedOrDash(row.std, 2),
+      ...row.dayValues.map((v) => (typeof v === "number" ? Number(v.toFixed(2)) : "")),
+      typeof row.ave === "number" ? Number(row.ave.toFixed(2)) : "",
+      typeof row.max === "number" ? Number(row.max.toFixed(2)) : "",
+      typeof row.min === "number" ? Number(row.min.toFixed(2)) : "",
+      typeof row.std === "number" ? Number(row.std.toFixed(2)) : "",
     ]);
 
-    const csv = [header, ...rows]
-      .map((r) => r.map((c) => escapeCsv(String(c))).join(","))
-      .join("\n");
-
-    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${site.site_number}_${selectedMonth}_excel_style.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Monthly");
+    XLSX.writeFile(wb, `${site.site_number}_${selectedMonth}_Monthly_Report.xlsx`);
   }, [excelMonthlyTable, selectedMonth, site.site_number]);
 
   const mapEmbedUrl = useMemo(() => {
