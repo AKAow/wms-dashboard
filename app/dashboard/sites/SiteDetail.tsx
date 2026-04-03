@@ -124,16 +124,33 @@ export default function SiteDetail({ site }: { site: Site }) {
     const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
     const endUtc = `${year}-${month}-${String(daysInMonth).padStart(2, "0")}T23:59:59+00:00`;
 
-    const { data } = await supabase
-      .from("measurements")
-      .select("*")
-      .eq("site_id", site.id)
-      .gte("timestamp", startUtc)
-      .lte("timestamp", endUtc)
-      .order("timestamp");
+    const allMeasurements: Measurement[] = [];
+    const pageSize = 1000;
+    let from = 0;
+
+    while (true) {
+      const { data, error } = await supabase
+        .from("measurements")
+        .select("*")
+        .eq("site_id", site.id)
+        .gte("timestamp", startUtc)
+        .lte("timestamp", endUtc)
+        .order("timestamp")
+        .range(from, from + pageSize - 1);
+
+      if (error) {
+        setLoading(false);
+        return;
+      }
+
+      const batch = data ?? [];
+      allMeasurements.push(...batch);
+      if (batch.length < pageSize) break;
+      from += pageSize;
+    }
 
     const statsMap: Record<string, { sum: number; count: number; min: number; max: number; sumSq: number }> = {};
-    (data ?? []).forEach((m) => {
+    allMeasurements.forEach((m) => {
       const day = toUTCDateOnly(m.timestamp);
       EXCEL_DISPLAY_CHANNELS.forEach((ch) => {
         const value = m[ch as keyof Measurement] as number | null;
