@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { MapPin, Activity, Wind, Navigation, BarChart2, Table2 } from "lucide-react";
+import { MapPin, Activity, Wind, Navigation, BarChart2, Table2, CalendarDays } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from "recharts";
 import type { Site, DailyStat, Measurement } from "@/lib/types";
 import { CHANNEL_LABELS } from "@/lib/types";
@@ -71,6 +71,8 @@ export default function SiteDetail({ site }: { site: Site }) {
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [loading, setLoading] = useState(false);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const monthInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
   const loadMeasurements = useCallback(async () => {
@@ -233,7 +235,25 @@ export default function SiteDetail({ site }: { site: Site }) {
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
             <div className="flex items-center gap-3">
               <label className="text-sm text-slate-400">날짜</label>
-              <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="rounded-xl border border-slate-700/80 bg-[#020617] px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none" />
+              <div className="flex items-center gap-2">
+                <input
+                  ref={dateInputRef}
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  onKeyDown={(e) => e.preventDefault()}
+                  onFocus={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
+                  className="rounded-xl border border-slate-700/80 bg-[#020617] px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => dateInputRef.current?.showPicker?.()}
+                  className="rounded-lg border border-slate-700/80 bg-[#020617] p-2 text-slate-300 hover:text-white"
+                  title="날짜 선택"
+                >
+                  <CalendarDays className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <label className="text-sm text-slate-400">항목</label>
@@ -293,7 +313,25 @@ export default function SiteDetail({ site }: { site: Site }) {
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
             <div className="flex items-center gap-3">
               <label className="text-sm text-slate-400">월</label>
-              <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="rounded-xl border border-slate-700/80 bg-[#020617] px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none" />
+              <div className="flex items-center gap-2">
+                <input
+                  ref={monthInputRef}
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  onKeyDown={(e) => e.preventDefault()}
+                  onFocus={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
+                  className="rounded-xl border border-slate-700/80 bg-[#020617] px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => monthInputRef.current?.showPicker?.()}
+                  className="rounded-lg border border-slate-700/80 bg-[#020617] p-2 text-slate-300 hover:text-white"
+                  title="월 선택"
+                >
+                  <CalendarDays className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <label className="text-sm text-slate-400">항목</label>
