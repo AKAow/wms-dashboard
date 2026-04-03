@@ -317,7 +317,22 @@ export default function SiteDetail({ site }: { site: Site }) {
     return { dayLabels, rows };
   }, [dailyStats, selectedMonth]);
 
-  const downloadMonthlyExcelCsv = useCallback(() => {
+  const downloadMonthlyExcel = useCallback(() => {
+    const fixedTemplates: Record<string, string> = {
+      "2026-03": "/reports/202603_Wando_Daesin_Monthly_Report_260403.xlsx",
+    };
+
+    const templatePath = fixedTemplates[selectedMonth];
+    if (templatePath) {
+      const a = document.createElement("a");
+      a.href = templatePath;
+      a.download = `${site.site_number}_${selectedMonth}_Monthly_Report.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+
     const header = [
       "Description",
       "Height",
@@ -578,10 +593,10 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
             <button
               type="button"
-              onClick={downloadMonthlyExcelCsv}
+              onClick={downloadMonthlyExcel}
               className="rounded-xl border border-blue-500/40 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-300 hover:bg-blue-500/20"
             >
-              엑셀 다운로드 (CSV)
+              고객사 엑셀 다운로드
             </button>
           </div>
 
