@@ -9,11 +9,26 @@ import { CHANNEL_LABELS } from "@/lib/types";
 
 type Tab = "overview" | "daily" | "monthly";
 
-const EXCEL_DAILY_TABLE_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"] as const;
-const EXCEL_MONTHLY_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"] as const;
-const EXCEL_WIND_SPEED_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5"] as const;
+const EXCEL_DISPLAY_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"] as const;
+const EXCEL_WIND_SPEED_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"] as const;
 const EXCEL_WIND_DIR_CHANNELS = ["ch13", "ch14", "ch15", "ch16"] as const;
 const EXCEL_ATMO_CHANNELS = ["ch17", "ch21", "ch22"] as const;
+
+const EXCEL_SENSOR_META: Record<string, { description: string; height: string }> = {
+  ch1: { description: "2 - NRG 40C Anem", height: "100m" },
+  ch2: { description: "3 - NRG 40C Anem", height: "96m" },
+  ch3: { description: "4 - NRG 40C Anem", height: "80m" },
+  ch4: { description: "5 - NRG 40C Anem", height: "80m" },
+  ch5: { description: "6 - NRG 40C Anem", height: "60m" },
+  ch7: { description: "7 - NRG 40C Anem", height: "40m" },
+  ch13: { description: "13 - NRG 200M Vane", height: "97m" },
+  ch14: { description: "14 - NRG 200M Vane", height: "77m" },
+  ch15: { description: "15 - NRG 200M Vane", height: "57m" },
+  ch16: { description: "16 - NRG 200M Vane", height: "37m" },
+  ch17: { description: "17 - NRG iP65 Baro", height: "2m" },
+  ch21: { description: "21 - NRG RH5x Humi", height: "5m" },
+  ch22: { description: "22 - NRG T60 Temp", height: "5m" },
+};
 const CHART_COLORS: Record<string, string> = {
   ch1: "#3b82f6",
   ch2: "#06b6d4",
@@ -111,7 +126,7 @@ export default function SiteDetail({ site }: { site: Site }) {
     const statsMap: Record<string, { sum: number; count: number; min: number; max: number; sumSq: number }> = {};
     (data ?? []).forEach((m) => {
       const day = toKSTDateOnly(m.timestamp);
-      EXCEL_MONTHLY_CHANNELS.forEach((ch) => {
+      EXCEL_DISPLAY_CHANNELS.forEach((ch) => {
         const value = m[ch as keyof Measurement] as number | null;
         if (typeof value !== "number") return;
         const key = `${day}|${ch}`;
@@ -193,7 +208,7 @@ export default function SiteDetail({ site }: { site: Site }) {
 
   const dailyExcelTable = useMemo(() => {
     const timeLabels = dailyExcelData.map((r) => r.time);
-    const rows = EXCEL_DAILY_TABLE_CHANNELS.map((ch) => {
+    const rows = EXCEL_DISPLAY_CHANNELS.map((ch) => {
       const values = dailyExcelData.map((r) => r[ch]);
       const numeric = values.filter((v): v is number => typeof v === "number");
       const ave = numeric.length ? numeric.reduce((a, b) => a + b, 0) / numeric.length : null;
@@ -252,14 +267,14 @@ export default function SiteDetail({ site }: { site: Site }) {
     const dayLabels = Array.from({ length: daysInMonth }, (_, i) => String(i + 1).padStart(2, "0"));
 
     const byChannelDate = dailyStats.reduce<Record<string, Record<string, number>>>((acc, s) => {
-      if (!EXCEL_MONTHLY_CHANNELS.includes(s.channel as (typeof EXCEL_MONTHLY_CHANNELS)[number])) return acc;
+      if (!EXCEL_DISPLAY_CHANNELS.includes(s.channel as (typeof EXCEL_DISPLAY_CHANNELS)[number])) return acc;
       if (!acc[s.channel]) acc[s.channel] = {};
       const day = s.date.slice(-2);
       acc[s.channel][day] = s.avg_value ?? 0;
       return acc;
     }, {});
 
-    const rows = EXCEL_MONTHLY_CHANNELS.map((ch) => {
+    const rows = EXCEL_DISPLAY_CHANNELS.map((ch) => {
       const dayValues = dayLabels.map((d) => byChannelDate[ch]?.[d]);
       const numeric = dayValues.filter((v): v is number => typeof v === "number");
       const ave = numeric.length ? numeric.reduce((a, b) => a + b, 0) / numeric.length : null;
@@ -448,6 +463,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <thead>
                     <tr className="border-b border-slate-800/40">
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Description</th>
+                      <th className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Height</th>
                       {dailyExcelTable.timeLabels.map((t, i) => <th key={`${t}-${i}`} className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t}</th>)}
                       {['AVE', 'MAX', 'MIN', 'STD'].map((h) => <th key={h} className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>)}
                     </tr>
@@ -455,7 +471,8 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <tbody className="divide-y divide-slate-800/40">
                     {dailyExcelTable.rows.map((row) => (
                       <tr key={row.ch} className="hover:bg-slate-800/20 transition-colors">
-                        <td className="px-4 py-2.5 text-xs text-slate-200 whitespace-nowrap">{CHANNEL_LABELS[row.ch]}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-200 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch]}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-300 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.height ?? "-"}</td>
                         {row.values.map((v, i) => <td key={`${row.ch}-${i}`} className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(v, 2)}</td>)}
                         <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.ave, 2)}</td>
                         <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.max, 2)}</td>
@@ -525,7 +542,8 @@ export default function SiteDetail({ site }: { site: Site }) {
                 <table className="w-full min-w-[2200px]">
                   <thead>
                     <tr className="border-b border-slate-800/40">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">채널</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Description</th>
+                      <th className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Height</th>
                       {excelMonthlyTable.dayLabels.map((d) => (
                         <th key={d} className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{d}</th>
                       ))}
@@ -537,7 +555,8 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <tbody className="divide-y divide-slate-800/40">
                     {excelMonthlyTable.rows.map((row) => (
                       <tr key={row.ch} className="hover:bg-slate-800/20 transition-colors">
-                        <td className="px-4 py-2.5 text-xs text-slate-200 whitespace-nowrap">{CHANNEL_LABELS[row.ch]}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-200 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch]}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-300 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.height ?? "-"}</td>
                         {row.dayValues.map((v, i) => (
                           <td key={`${row.ch}-${i}`} className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(v, 2)}</td>
                         ))}
