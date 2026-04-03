@@ -9,10 +9,11 @@ import { CHANNEL_LABELS } from "@/lib/types";
 
 type Tab = "overview" | "daily" | "monthly";
 
-const DAILY_CHANNEL_OPTIONS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"];
-const MONTHLY_CHANNEL_OPTIONS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch22"];
 const EXCEL_DAILY_TABLE_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"] as const;
 const EXCEL_MONTHLY_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"] as const;
+const EXCEL_WIND_SPEED_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5"] as const;
+const EXCEL_WIND_DIR_CHANNELS = ["ch13", "ch14", "ch15", "ch16"] as const;
+const EXCEL_ATMO_CHANNELS = ["ch17", "ch21", "ch22"] as const;
 const CHART_COLORS: Record<string, string> = {
   ch1: "#3b82f6",
   ch2: "#06b6d4",
@@ -70,8 +71,6 @@ export default function SiteDetail({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
   const [selectedDate, setSelectedDate] = useState(formatKSTDate());
   const [selectedMonth, setSelectedMonth] = useState(formatKSTMonth());
-  const [dailyChannel, setDailyChannel] = useState("ch1");
-  const [monthlyChannel, setMonthlyChannel] = useState("ch1");
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [loading, setLoading] = useState(false);
@@ -97,31 +96,68 @@ export default function SiteDetail({ site }: { site: Site }) {
   const loadMonthlyStats = useCallback(async () => {
     setLoading(true);
     const [year, month] = selectedMonth.split("-");
+    const startUtc = new Date(`${year}-${month}-01T00:00:00+09:00`).toISOString();
     const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
-    const end = `${year}-${month}-${String(daysInMonth).padStart(2, "0")}`;
+    const endUtc = new Date(`${year}-${month}-${String(daysInMonth).padStart(2, "0")}T23:59:59+09:00`).toISOString();
+
     const { data } = await supabase
-      .from("daily_stats")
+      .from("measurements")
       .select("*")
       .eq("site_id", site.id)
-      .gte("date", `${year}-${month}-01`)
-      .lte("date", end)
-      .order("date")
-      .order("channel");
-    setDailyStats(data ?? []);
+      .gte("timestamp", startUtc)
+      .lte("timestamp", endUtc)
+      .order("timestamp");
+
+    const statsMap: Record<string, { sum: number; count: number; min: number; max: number; sumSq: number }> = {};
+    (data ?? []).forEach((m) => {
+      const day = toKSTDateOnly(m.timestamp);
+      EXCEL_MONTHLY_CHANNELS.forEach((ch) => {
+        const value = m[ch as keyof Measurement] as number | null;
+        if (typeof value !== "number") return;
+        const key = `${day}|${ch}`;
+        if (!statsMap[key]) statsMap[key] = { sum: 0, count: 0, min: value, max: value, sumSq: 0 };
+        const s = statsMap[key];
+        s.sum += value;
+        s.count += 1;
+        s.min = Math.min(s.min, value);
+        s.max = Math.max(s.max, value);
+        s.sumSq += value * value;
+      });
+    });
+
+    const computed: DailyStat[] = Object.entries(statsMap).map(([key, s]) => {
+      const [date, channel] = key.split("|");
+      const avg = s.count ? s.sum / s.count : null;
+      const variance = s.count && avg != null ? s.sumSq / s.count - avg * avg : null;
+      return {
+        id: `${site.id}-${date}-${channel}`,
+        site_id: site.id,
+        date,
+        channel,
+        avg_value: avg,
+        max_value: s.count ? s.max : null,
+        min_value: s.count ? s.min : null,
+        std_value: variance != null ? Math.sqrt(Math.max(variance, 0)) : null,
+        data_count: s.count,
+      };
+    });
+
+    computed.sort((a, b) => (a.date === b.date ? a.channel.localeCompare(b.channel) : a.date.localeCompare(b.date)));
+    setDailyStats(computed);
     setLoading(false);
   }, [selectedMonth, site.id, supabase]);
 
   useEffect(() => {
     async function initDefaultMonthFromData() {
       const { data } = await supabase
-        .from("daily_stats")
-        .select("date")
+        .from("measurements")
+        .select("timestamp")
         .eq("site_id", site.id)
-        .order("date", { ascending: false })
+        .order("timestamp", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (data?.date) {
-        setSelectedMonth(data.date.slice(0, 7));
+      if (data?.timestamp) {
+        setSelectedMonth(toKSTDateOnly(data.timestamp).slice(0, 7));
       }
     }
     initDefaultMonthFromData();
@@ -135,31 +171,42 @@ export default function SiteDetail({ site }: { site: Site }) {
     if (tab === "monthly" || tab === "overview") loadMonthlyStats();
   }, [tab, selectedMonth, loadMonthlyStats]);
 
-  const dailyChartData = useMemo(() => {
+  const dailyExcelData = useMemo(() => {
     return measurements
       .filter((m) => toKSTDateOnly(m.timestamp) === selectedDate)
       .map((m) => ({
         time: toKSTLabel(m.timestamp),
-        value: m[dailyChannel as keyof Measurement] as number | null,
-      }))
-      .filter((row) => row.value !== null);
-  }, [measurements, selectedDate, dailyChannel]);
-
-  const dailyTableRows = useMemo(() => {
-    return measurements
-      .filter((m) => toKSTDateOnly(m.timestamp) === selectedDate)
-      .map((m) => ({
-        time: toKSTLabel(m.timestamp),
-        values: EXCEL_DAILY_TABLE_CHANNELS.reduce<Record<string, number | null>>((acc, ch) => {
-          acc[ch] = m[ch as keyof Measurement] as number | null;
-          return acc;
-        }, {}),
+        ch1: m.ch1,
+        ch2: m.ch2,
+        ch3: m.ch3,
+        ch4: m.ch4,
+        ch5: m.ch5,
+        ch13: m.ch13,
+        ch14: m.ch14,
+        ch15: m.ch15,
+        ch16: m.ch16,
+        ch17: m.ch17,
+        ch21: m.ch21,
+        ch22: m.ch22,
       }));
   }, [measurements, selectedDate]);
 
-  const monthlyChannelStats = useMemo(() => {
-    return dailyStats.filter((s) => s.channel === monthlyChannel);
-  }, [dailyStats, monthlyChannel]);
+  const dailyExcelTable = useMemo(() => {
+    const timeLabels = dailyExcelData.map((r) => r.time);
+    const rows = EXCEL_DAILY_TABLE_CHANNELS.map((ch) => {
+      const values = dailyExcelData.map((r) => r[ch]);
+      const numeric = values.filter((v): v is number => typeof v === "number");
+      const ave = numeric.length ? numeric.reduce((a, b) => a + b, 0) / numeric.length : null;
+      const max = numeric.length ? Math.max(...numeric) : null;
+      const min = numeric.length ? Math.min(...numeric) : null;
+      const std = numeric.length
+        ? Math.sqrt(numeric.reduce((sum, v) => sum + (v - (ave ?? 0)) ** 2, 0) / numeric.length)
+        : null;
+      return { ch, values, ave, max, min, std };
+    });
+
+    return { timeLabels, rows };
+  }, [dailyExcelData]);
 
   const overviewMonthlyPreview = useMemo(() => {
     return dailyStats
@@ -347,49 +394,73 @@ export default function SiteDetail({ site }: { site: Site }) {
                 </button>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <label className="text-sm text-slate-400">항목</label>
-              <select value={dailyChannel} onChange={(e) => setDailyChannel(e.target.value)} className="rounded-xl border border-slate-700/80 bg-[#020617] px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none">
-                {DAILY_CHANNEL_OPTIONS.map((ch) => <option key={ch} value={ch}>{CHANNEL_LABELS[ch]}</option>)}
-              </select>
-            </div>
           </div>
 
           {loading ? <div className="text-center py-12 text-slate-500 text-sm">로딩 중...</div>
-          : dailyChartData.length === 0 ? <div className="text-center py-12 text-slate-500 text-sm rounded-xl border border-slate-800/60 bg-[#0b111d]">해당 날짜의 데이터가 없습니다</div>
+          : dailyExcelData.length === 0 ? <div className="text-center py-12 text-slate-500 text-sm rounded-xl border border-slate-800/60 bg-[#0b111d]">해당 날짜의 데이터가 없습니다</div>
           : <>
             <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
-              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400" />{CHANNEL_LABELS[dailyChannel]} 시계열</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={dailyChartData}>
+              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400" />Wind Speed</h3>
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={dailyExcelData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis dataKey="time" tick={{ fontSize: 11, fill: "#64748b" }} interval={17} />
+                  <XAxis dataKey="time" tick={{ fontSize: 10, fill: "#64748b" }} interval={11} />
+                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
+                  <Tooltip contentStyle={{ backgroundColor: "#0b111d", border: "1px solid #1e293b", borderRadius: "8px", color: "#f8fafc" }} />
+                  <Legend wrapperStyle={{ fontSize: "11px" }} />
+                  {EXCEL_WIND_SPEED_CHANNELS.map((ch) => <Line key={ch} type="monotone" dataKey={ch} name={CHANNEL_LABELS[ch]} stroke={CHART_COLORS[ch] ?? "#3b82f6"} dot={false} strokeWidth={1.8} />)}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
+              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />Wind Direction</h3>
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={dailyExcelData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="time" tick={{ fontSize: 10, fill: "#64748b" }} interval={11} />
+                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} domain={[0, 360]} unit=" °" />
+                  <Tooltip contentStyle={{ backgroundColor: "#0b111d", border: "1px solid #1e293b", borderRadius: "8px", color: "#f8fafc" }} />
+                  <Legend wrapperStyle={{ fontSize: "11px" }} />
+                  {EXCEL_WIND_DIR_CHANNELS.map((ch) => <Line key={ch} type="monotone" dataKey={ch} name={CHANNEL_LABELS[ch]} stroke={CHART_COLORS[ch] ?? "#94a3b8"} dot={false} strokeWidth={1.8} />)}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
+              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-blue-400" />Atmospheric / Humidity / Temp</h3>
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={dailyExcelData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="time" tick={{ fontSize: 10, fill: "#64748b" }} interval={11} />
                   <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
                   <Tooltip contentStyle={{ backgroundColor: "#0b111d", border: "1px solid #1e293b", borderRadius: "8px", color: "#f8fafc" }} />
-                  <Line type="monotone" dataKey="value" name={CHANNEL_LABELS[dailyChannel]} stroke={CHART_COLORS[dailyChannel] ?? "#3b82f6"} dot={false} strokeWidth={2} />
+                  <Legend wrapperStyle={{ fontSize: "11px" }} />
+                  {EXCEL_ATMO_CHANNELS.map((ch) => <Line key={ch} type="monotone" dataKey={ch} name={CHANNEL_LABELS[ch]} stroke={CHART_COLORS[ch] ?? "#22d3ee"} dot={false} strokeWidth={1.8} />)}
                 </LineChart>
               </ResponsiveContainer>
             </div>
 
             <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] overflow-hidden">
-              <div className="p-4 border-b border-slate-800/60 flex items-center gap-2 text-white text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />일별 수치 데이터 (KST)</div>
+              <div className="p-4 border-b border-slate-800/60 flex items-center gap-2 text-white text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />10 Minutes Average Data (엑셀형 가로)</div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1600px]">
+                <table className="w-full min-w-[2400px]">
                   <thead>
                     <tr className="border-b border-slate-800/40">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">시간</th>
-                      {EXCEL_DAILY_TABLE_CHANNELS.map((ch) => (
-                        <th key={ch} className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{CHANNEL_LABELS[ch]}</th>
-                      ))}
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Description</th>
+                      {dailyExcelTable.timeLabels.map((t, i) => <th key={`${t}-${i}`} className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t}</th>)}
+                      {['AVE', 'MAX', 'MIN', 'STD'].map((h) => <th key={h} className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>)}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/40">
-                    {dailyTableRows.map((row, i) => (
-                      <tr key={i} className="hover:bg-slate-800/20 transition-colors">
-                        <td className="px-4 py-2.5 text-xs text-slate-300 font-mono">{row.time}</td>
-                        {EXCEL_DAILY_TABLE_CHANNELS.map((ch) => (
-                          <td key={`${i}-${ch}`} className="px-4 py-2.5 text-xs text-slate-300">{row.values[ch] ?? "-"}</td>
-                        ))}
+                    {dailyExcelTable.rows.map((row) => (
+                      <tr key={row.ch} className="hover:bg-slate-800/20 transition-colors">
+                        <td className="px-4 py-2.5 text-xs text-slate-200 whitespace-nowrap">{CHANNEL_LABELS[row.ch]}</td>
+                        {row.values.map((v, i) => <td key={`${row.ch}-${i}`} className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(v, 2)}</td>)}
+                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.ave, 2)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.max, 2)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.min, 2)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.std, 2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -424,12 +495,6 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <CalendarDays className="w-4 h-4" />
                 </button>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <label className="text-sm text-slate-400">항목</label>
-              <select value={monthlyChannel} onChange={(e) => setMonthlyChannel(e.target.value)} className="rounded-xl border border-slate-700/80 bg-[#020617] px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none">
-                {MONTHLY_CHANNEL_OPTIONS.map((ch) => <option key={ch} value={ch}>{CHANNEL_LABELS[ch]}</option>)}
-              </select>
             </div>
           </div>
 
