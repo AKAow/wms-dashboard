@@ -35,7 +35,13 @@ const CHART_COLORS: Record<string, string> = {
   ch3: "#8b5cf6",
   ch4: "#ec4899",
   ch5: "#22c55e",
+  ch7: "#14b8a6",
   ch13: "#f59e0b",
+  ch14: "#f97316",
+  ch15: "#eab308",
+  ch16: "#84cc16",
+  ch17: "#a855f7",
+  ch21: "#10b981",
   ch22: "#ef4444",
 };
 
@@ -82,6 +88,9 @@ const toKSTDateOnly = (timestamp: string) => {
 const toFixedOrDash = (value: number | null | undefined, digits = 2) =>
   typeof value === "number" ? value.toFixed(digits) : "-";
 
+const toUTCDateOnly = (timestamp: string) => timestamp.slice(0, 10);
+const escapeCsv = (v: string) => `"${v.replaceAll('"', '""')}"`;
+
 export default function SiteDetail({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
   const [selectedDate, setSelectedDate] = useState(formatKSTDate());
@@ -111,9 +120,9 @@ export default function SiteDetail({ site }: { site: Site }) {
   const loadMonthlyStats = useCallback(async () => {
     setLoading(true);
     const [year, month] = selectedMonth.split("-");
-    const startUtc = new Date(`${year}-${month}-01T00:00:00+09:00`).toISOString();
+    const startUtc = `${year}-${month}-01T00:00:00+00:00`;
     const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
-    const endUtc = new Date(`${year}-${month}-${String(daysInMonth).padStart(2, "0")}T23:59:59+09:00`).toISOString();
+    const endUtc = `${year}-${month}-${String(daysInMonth).padStart(2, "0")}T23:59:59+00:00`;
 
     const { data } = await supabase
       .from("measurements")
@@ -125,7 +134,7 @@ export default function SiteDetail({ site }: { site: Site }) {
 
     const statsMap: Record<string, { sum: number; count: number; min: number; max: number; sumSq: number }> = {};
     (data ?? []).forEach((m) => {
-      const day = toKSTDateOnly(m.timestamp);
+      const day = toUTCDateOnly(m.timestamp);
       EXCEL_DISPLAY_CHANNELS.forEach((ch) => {
         const value = m[ch as keyof Measurement] as number | null;
         if (typeof value !== "number") return;
@@ -172,7 +181,7 @@ export default function SiteDetail({ site }: { site: Site }) {
         .limit(1)
         .maybeSingle();
       if (data?.timestamp) {
-        setSelectedMonth(toKSTDateOnly(data.timestamp).slice(0, 7));
+        setSelectedMonth(data.timestamp.slice(0, 7));
       }
     }
     initDefaultMonthFromData();
@@ -196,6 +205,7 @@ export default function SiteDetail({ site }: { site: Site }) {
         ch3: m.ch3,
         ch4: m.ch4,
         ch5: m.ch5,
+        ch7: m.ch7,
         ch13: m.ch13,
         ch14: m.ch14,
         ch15: m.ch15,
@@ -289,6 +299,42 @@ export default function SiteDetail({ site }: { site: Site }) {
 
     return { dayLabels, rows };
   }, [dailyStats, selectedMonth]);
+
+  const downloadMonthlyExcelCsv = useCallback(() => {
+    const header = [
+      "Description",
+      "Height",
+      ...excelMonthlyTable.dayLabels,
+      "AVE",
+      "MAX",
+      "MIN",
+      "STD",
+    ];
+
+    const rows = excelMonthlyTable.rows.map((row) => [
+      EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch],
+      EXCEL_SENSOR_META[row.ch]?.height ?? "-",
+      ...row.dayValues.map((v) => toFixedOrDash(v, 2)),
+      toFixedOrDash(row.ave, 2),
+      toFixedOrDash(row.max, 2),
+      toFixedOrDash(row.min, 2),
+      toFixedOrDash(row.std, 2),
+    ]);
+
+    const csv = [header, ...rows]
+      .map((r) => r.map((c) => escapeCsv(String(c))).join(","))
+      .join("\n");
+
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${site.site_number}_${selectedMonth}_excel_style.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, [excelMonthlyTable, selectedMonth, site.site_number]);
 
   const mapEmbedUrl = useMemo(() => {
     if (site.latitude == null || site.longitude == null) return null;
@@ -490,7 +536,7 @@ export default function SiteDetail({ site }: { site: Site }) {
 
       {tab === "monthly" && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <label className="text-sm text-slate-400">월</label>
               <div className="flex items-center gap-2">
@@ -513,6 +559,13 @@ export default function SiteDetail({ site }: { site: Site }) {
                 </button>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={downloadMonthlyExcelCsv}
+              className="rounded-xl border border-blue-500/40 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-300 hover:bg-blue-500/20"
+            >
+              엑셀 다운로드 (CSV)
+            </button>
           </div>
 
           {loading ? <div className="text-center py-12 text-slate-500 text-sm">로딩 중...</div>
