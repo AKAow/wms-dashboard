@@ -12,6 +12,7 @@ type Tab = "overview" | "daily" | "monthly";
 const DAILY_CHANNEL_OPTIONS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"];
 const MONTHLY_CHANNEL_OPTIONS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch22"];
 const EXCEL_DAILY_TABLE_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"] as const;
+const EXCEL_MONTHLY_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"] as const;
 const CHART_COLORS: Record<string, string> = {
   ch1: "#3b82f6",
   ch2: "#06b6d4",
@@ -96,7 +97,8 @@ export default function SiteDetail({ site }: { site: Site }) {
   const loadMonthlyStats = useCallback(async () => {
     setLoading(true);
     const [year, month] = selectedMonth.split("-");
-    const end = new Date(parseInt(year), parseInt(month), 0).toISOString().split("T")[0];
+    const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
+    const end = `${year}-${month}-${String(daysInMonth).padStart(2, "0")}`;
     const { data } = await supabase
       .from("daily_stats")
       .select("*")
@@ -108,6 +110,22 @@ export default function SiteDetail({ site }: { site: Site }) {
     setDailyStats(data ?? []);
     setLoading(false);
   }, [selectedMonth, site.id, supabase]);
+
+  useEffect(() => {
+    async function initDefaultMonthFromData() {
+      const { data } = await supabase
+        .from("daily_stats")
+        .select("date")
+        .eq("site_id", site.id)
+        .order("date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data?.date) {
+        setSelectedMonth(data.date.slice(0, 7));
+      }
+    }
+    initDefaultMonthFromData();
+  }, [site.id, supabase]);
 
   useEffect(() => {
     if (tab === "daily") loadMeasurements();
@@ -161,7 +179,7 @@ export default function SiteDetail({ site }: { site: Site }) {
   }));
 
   const excelMonthlyChartData = useMemo(() => {
-    return dailyStats
+    const rows = dailyStats
       .filter((s) => ["ch1", "ch2", "ch3", "ch4", "ch5"].includes(s.channel))
       .reduce<Record<string, { date: string; ch1: number; ch2: number; ch3: number; ch4: number; ch5: number }>>((acc, s) => {
         if (!acc[s.date]) {
@@ -175,7 +193,40 @@ export default function SiteDetail({ site }: { site: Site }) {
         if (s.channel === "ch5") acc[s.date].ch5 = v;
         return acc;
       }, {});
+
+    return Object.entries(rows)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, v]) => v);
   }, [dailyStats]);
+
+  const excelMonthlyTable = useMemo(() => {
+    const [year, month] = selectedMonth.split("-");
+    const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
+    const dayLabels = Array.from({ length: daysInMonth }, (_, i) => String(i + 1).padStart(2, "0"));
+
+    const byChannelDate = dailyStats.reduce<Record<string, Record<string, number>>>((acc, s) => {
+      if (!EXCEL_MONTHLY_CHANNELS.includes(s.channel as (typeof EXCEL_MONTHLY_CHANNELS)[number])) return acc;
+      if (!acc[s.channel]) acc[s.channel] = {};
+      const day = s.date.slice(-2);
+      acc[s.channel][day] = s.avg_value ?? 0;
+      return acc;
+    }, {});
+
+    const rows = EXCEL_MONTHLY_CHANNELS.map((ch) => {
+      const dayValues = dayLabels.map((d) => byChannelDate[ch]?.[d]);
+      const numeric = dayValues.filter((v): v is number => typeof v === "number");
+      const ave = numeric.length ? numeric.reduce((a, b) => a + b, 0) / numeric.length : null;
+      const max = numeric.length ? Math.max(...numeric) : null;
+      const min = numeric.length ? Math.min(...numeric) : null;
+      const std = numeric.length
+        ? Math.sqrt(numeric.reduce((sum, v) => sum + (v - (ave ?? 0)) ** 2, 0) / numeric.length)
+        : null;
+
+      return { ch, dayValues, ave, max, min, std };
+    });
+
+    return { dayLabels, rows };
+  }, [dailyStats, selectedMonth]);
 
   const mapEmbedUrl = useMemo(() => {
     if (site.latitude == null || site.longitude == null) return null;
@@ -388,7 +439,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
               <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />엑셀형 월간 채널 비교 그래프 (평균값)</h3>
               <ResponsiveContainer width="100%" height={320}>
-                <LineChart data={Object.values(excelMonthlyChartData)}>
+                <LineChart data={excelMonthlyChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
                   <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
@@ -404,25 +455,31 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
 
             <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] overflow-hidden">
-              <div className="p-4 border-b border-slate-800/60 flex items-center gap-2 text-white text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />월별 통계 수치</div>
+              <div className="p-4 border-b border-slate-800/60 flex items-center gap-2 text-white text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />월별 통계 수치 (엑셀형 가로 테이블)</div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px]">
+                <table className="w-full min-w-[2200px]">
                   <thead>
                     <tr className="border-b border-slate-800/40">
-                      {["날짜", "평균", "최대", "최소", "표준편차", "데이터수"].map((h) => (
-                        <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">채널</th>
+                      {excelMonthlyTable.dayLabels.map((d) => (
+                        <th key={d} className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{d}</th>
+                      ))}
+                      {['AVE', 'MAX', 'MIN', 'STD'].map((h) => (
+                        <th key={h} className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/40">
-                    {monthlyChannelStats.map((row) => (
-                      <tr key={`${row.date}-${row.channel}`} className="hover:bg-slate-800/20 transition-colors">
-                        <td className="px-4 py-2.5 text-xs text-slate-300 font-mono">{row.date}</td>
-                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.avg_value ?? "-"}</td>
-                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.max_value ?? "-"}</td>
-                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.min_value ?? "-"}</td>
-                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.std_value ?? "-"}</td>
-                        <td className="px-4 py-2.5 text-xs text-slate-300">{row.data_count ?? "-"}</td>
+                    {excelMonthlyTable.rows.map((row) => (
+                      <tr key={row.ch} className="hover:bg-slate-800/20 transition-colors">
+                        <td className="px-4 py-2.5 text-xs text-slate-200 whitespace-nowrap">{CHANNEL_LABELS[row.ch]}</td>
+                        {row.dayValues.map((v, i) => (
+                          <td key={`${row.ch}-${i}`} className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(v, 2)}</td>
+                        ))}
+                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.ave, 2)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.max, 2)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.min, 2)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.std, 2)}</td>
                       </tr>
                     ))}
                   </tbody>
