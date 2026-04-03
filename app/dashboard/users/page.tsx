@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { Users, Plus, Shield, Eye } from "lucide-react";
+import { Plus, Shield, Eye } from "lucide-react";
 
 export default async function UsersPage() {
   const supabase = await createClient();

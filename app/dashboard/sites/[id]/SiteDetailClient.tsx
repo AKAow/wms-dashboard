@@ -1,15 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { MapPin, Activity, Thermometer, Wind, Navigation, BarChart2 } from "lucide-react";
+import { MapPin, Activity, Wind, Navigation, BarChart2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from "recharts";
 import type { Site, DailyStat, Measurement } from "@/lib/types";
 import { CHANNEL_LABELS } from "@/lib/types";
 
 type Tab = "overview" | "daily" | "monthly";
-
-const COLORS = ["#3b82f6", "#06b6d4", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#f97316", "#ec4899"];
 
 export default function SiteDetailClient({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
@@ -20,15 +18,7 @@ export default function SiteDetailClient({ site }: { site: Site }) {
   const [loading, setLoading] = useState(false);
   const supabase = createClient();
 
-  useEffect(() => {
-    if (tab === "daily") loadMeasurements();
-  }, [tab, selectedDate]);
-
-  useEffect(() => {
-    if (tab === "monthly") loadMonthlyStats();
-  }, [tab, selectedMonth]);
-
-  const loadMeasurements = async () => {
+  const loadMeasurements = useCallback(async () => {
     setLoading(true);
     const start = `${selectedDate}T00:00:00`;
     const end = `${selectedDate}T23:59:59`;
@@ -41,9 +31,9 @@ export default function SiteDetailClient({ site }: { site: Site }) {
       .order("timestamp");
     setMeasurements(data ?? []);
     setLoading(false);
-  };
+  }, [selectedDate, site.id, supabase]);
 
-  const loadMonthlyStats = async () => {
+  const loadMonthlyStats = useCallback(async () => {
     setLoading(true);
     const [year, month] = selectedMonth.split("-");
     const start = `${year}-${month}-01`;
@@ -57,7 +47,15 @@ export default function SiteDetailClient({ site }: { site: Site }) {
       .order("date");
     setDailyStats(data ?? []);
     setLoading(false);
-  };
+  }, [selectedMonth, site.id, supabase]);
+
+  useEffect(() => {
+    if (tab === "daily") loadMeasurements();
+  }, [tab, selectedDate, loadMeasurements]);
+
+  useEffect(() => {
+    if (tab === "monthly") loadMonthlyStats();
+  }, [tab, selectedMonth, loadMonthlyStats]);
 
   const chartData = measurements.map((m) => ({
     time: new Date(m.timestamp).toLocaleTimeString("ko", { hour: "2-digit", minute: "2-digit" }),
