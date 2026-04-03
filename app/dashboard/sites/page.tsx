@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { Plus, MapPin, Pencil, Activity } from "lucide-react";

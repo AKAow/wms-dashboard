@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import { createClient } from "@/lib/supabase/server";
 import { Plus, Shield, Eye } from "lucide-react";
 

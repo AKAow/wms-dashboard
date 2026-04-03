@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import { createClient } from "@/lib/supabase/server";
 import { Upload, RefreshCw, CheckCircle, XCircle, Clock } from "lucide-react";
 import type { UploadHistory } from "@/lib/types";
