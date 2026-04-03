@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { MapPin, Activity, Wind, Navigation, BarChart2, Table2, CalendarDays } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import type { Site, DailyStat, Measurement } from "@/lib/types";
 import { CHANNEL_LABELS } from "@/lib/types";
 
@@ -61,6 +61,9 @@ const toKSTDateOnly = (timestamp: string) => {
   const { year, month, day } = getKSTParts(new Date(timestamp));
   return `${year}-${month}-${day}`;
 };
+
+const toFixedOrDash = (value: number | null | undefined, digits = 2) =>
+  typeof value === "number" ? value.toFixed(digits) : "-";
 
 export default function SiteDetail({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
@@ -140,15 +143,6 @@ export default function SiteDetail({ site }: { site: Site }) {
     return dailyStats.filter((s) => s.channel === monthlyChannel);
   }, [dailyStats, monthlyChannel]);
 
-  const monthlyChartData = useMemo(() => {
-    return monthlyChannelStats.map((s) => ({
-      date: s.date.slice(5),
-      avg: s.avg_value ?? 0,
-      max: s.max_value ?? 0,
-      min: s.min_value ?? 0,
-    }));
-  }, [monthlyChannelStats]);
-
   const overviewMonthlyPreview = useMemo(() => {
     return dailyStats
       .filter((s) => ["ch1", "ch2", "ch3"].includes(s.channel))
@@ -165,6 +159,32 @@ export default function SiteDetail({ site }: { site: Site }) {
     ch2: vals.ch2 ?? 0,
     ch3: vals.ch3 ?? 0,
   }));
+
+  const excelMonthlyChartData = useMemo(() => {
+    return dailyStats
+      .filter((s) => ["ch1", "ch2", "ch3", "ch4", "ch5"].includes(s.channel))
+      .reduce<Record<string, { date: string; ch1: number; ch2: number; ch3: number; ch4: number; ch5: number }>>((acc, s) => {
+        if (!acc[s.date]) {
+          acc[s.date] = { date: s.date.slice(5), ch1: 0, ch2: 0, ch3: 0, ch4: 0, ch5: 0 };
+        }
+        const v = s.avg_value ?? 0;
+        if (s.channel === "ch1") acc[s.date].ch1 = v;
+        if (s.channel === "ch2") acc[s.date].ch2 = v;
+        if (s.channel === "ch3") acc[s.date].ch3 = v;
+        if (s.channel === "ch4") acc[s.date].ch4 = v;
+        if (s.channel === "ch5") acc[s.date].ch5 = v;
+        return acc;
+      }, {});
+  }, [dailyStats]);
+
+  const mapEmbedUrl = useMemo(() => {
+    if (site.latitude == null || site.longitude == null) return null;
+    const lat = site.latitude;
+    const lon = site.longitude;
+    const delta = 0.01;
+    const bbox = `${lon - delta},${lat - delta},${lon + delta},${lat + delta}`;
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${lat}%2C${lon}`;
+  }, [site.latitude, site.longitude]);
 
   return (
     <div className="space-y-6">
@@ -193,7 +213,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5 space-y-4">
               <h3 className="text-sm font-semibold text-white flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-400" />사이트 정보</h3>
               <div className="space-y-3 text-sm">
-                {[["사이트 번호", site.site_number], ["위치명", site.location_name ?? "-"], ["위도", site.latitude ? `${site.latitude}° N` : "-"], ["경도", site.longitude ? `${site.longitude}° E` : "-"], ["고도", site.elevation ? `${site.elevation} m` : "-"], ["iPack", site.ipack_email ?? "-"]].map(([l, v]) => (
+                {[["사이트 번호", site.site_number], ["위치명", site.location_name ?? "-"], ["위도", site.latitude != null ? `${toFixedOrDash(site.latitude, 6)}° N` : "-"], ["경도", site.longitude != null ? `${toFixedOrDash(site.longitude, 6)}° E` : "-"], ["고도", site.elevation != null ? `${toFixedOrDash(site.elevation, 1)} m` : "-"], ["iPack", site.ipack_email ?? "-"]].map(([l, v]) => (
                   <div key={l} className="flex justify-between gap-4"><span className="text-slate-500">{l}</span><span className="text-slate-200 font-mono text-xs text-right">{v}</span></div>
                 ))}
               </div>
@@ -206,6 +226,27 @@ export default function SiteDetail({ site }: { site: Site }) {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5 space-y-3">
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />계측기 위치 지도</h3>
+            {!mapEmbedUrl ? (
+              <div className="text-sm text-slate-500">위도/경도 정보가 없어 지도를 표시할 수 없습니다</div>
+            ) : (
+              <>
+                <div className="w-full h-[280px] rounded-xl overflow-hidden border border-slate-800/60">
+                  <iframe title="site-map" src={mapEmbedUrl} className="w-full h-full" loading="lazy" />
+                </div>
+                <a
+                  href={`https://www.openstreetmap.org/?mlat=${site.latitude}&mlon=${site.longitude}#map=12/${site.latitude}/${site.longitude}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300"
+                >
+                  OpenStreetMap에서 크게 보기
+                </a>
+              </>
+            )}
           </div>
 
           <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
@@ -342,21 +383,23 @@ export default function SiteDetail({ site }: { site: Site }) {
           </div>
 
           {loading ? <div className="text-center py-12 text-slate-500 text-sm">로딩 중...</div>
-          : monthlyChartData.length === 0 ? <div className="text-center py-12 text-slate-500 text-sm rounded-xl border border-slate-800/60 bg-[#0b111d]">해당 월의 데이터가 없습니다</div>
+          : Object.keys(excelMonthlyChartData).length === 0 ? <div className="text-center py-12 text-slate-500 text-sm rounded-xl border border-slate-800/60 bg-[#0b111d]">해당 월의 데이터가 없습니다</div>
           : <>
             <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
-              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />{CHANNEL_LABELS[monthlyChannel]} 월간 통계</h3>
+              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />엑셀형 월간 채널 비교 그래프 (평균값)</h3>
               <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={monthlyChartData}>
+                <LineChart data={Object.values(excelMonthlyChartData)}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
-                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
+                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
                   <Tooltip contentStyle={{ backgroundColor: "#0b111d", border: "1px solid #1e293b", borderRadius: "8px", color: "#f8fafc" }} />
                   <Legend wrapperStyle={{ fontSize: "12px" }} />
-                  <Bar dataKey="avg" name="평균" fill={CHART_COLORS[monthlyChannel] ?? "#3b82f6"} radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="max" name="최대" fill="#22c55e" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="min" name="최소" fill="#ef4444" radius={[2, 2, 0, 0]} />
-                </BarChart>
+                  <Line type="monotone" dataKey="ch1" name="100m 풍속 (N)" stroke={CHART_COLORS.ch1} dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey="ch2" name="96m 풍속 (N)" stroke={CHART_COLORS.ch2} dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey="ch3" name="80m 풍속 (N)" stroke={CHART_COLORS.ch3} dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey="ch4" name="80m 풍속 (S)" stroke={CHART_COLORS.ch4} dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey="ch5" name="60m 풍속 (N)" stroke={CHART_COLORS.ch5} dot={false} strokeWidth={2} />
+                </LineChart>
               </ResponsiveContainer>
             </div>
 
