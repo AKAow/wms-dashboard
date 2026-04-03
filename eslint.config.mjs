@@ -14,8 +14,6 @@ const eslintConfig = [
   {
     rules: {
       "react-hooks/exhaustive-deps": "warn",
-      "react-hooks/immutability": "off",
-      "react-hooks/set-state-in-effect": "off",
       "@next/next/no-page-custom-font": "off",
     },
   },
