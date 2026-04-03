@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "pages:build": "opennextjs-cloudflare build",
+    "pages:build": "opennextjs-cloudflare build --yes",
     "deploy": "opennextjs-cloudflare deploy",
     "preview": "opennextjs-cloudflare preview"
   },
