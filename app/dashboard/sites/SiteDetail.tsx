@@ -90,7 +90,6 @@ const toFixedOrDash = (value: number | null | undefined, digits = 2) =>
   typeof value === "number" ? value.toFixed(digits) : "-";
 
 const toUTCDateOnly = (timestamp: string) => timestamp.slice(0, 10);
-const escapeCsv = (v: string) => `"${v.replaceAll('"', '""')}"`;
 
 export default function SiteDetail({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
@@ -120,11 +119,6 @@ export default function SiteDetail({ site }: { site: Site }) {
 
   const loadMonthlyStats = useCallback(async () => {
     setLoading(true);
-    const [year, month] = selectedMonth.split("-");
-    const startUtc = `${year}-${month}-01T00:00:00+00:00`;
-    const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
-    const endUtc = `${year}-${month}-${String(daysInMonth).padStart(2, "0")}T23:59:59+00:00`;
-
     const allMeasurements: Measurement[] = [];
     const pageSize = 1000;
     let from = 0;
@@ -134,8 +128,6 @@ export default function SiteDetail({ site }: { site: Site }) {
         .from("measurements")
         .select("*")
         .eq("site_id", site.id)
-        .gte("timestamp", startUtc)
-        .lte("timestamp", endUtc)
         .order("timestamp")
         .range(from, from + pageSize - 1);
 
@@ -187,7 +179,7 @@ export default function SiteDetail({ site }: { site: Site }) {
     computed.sort((a, b) => (a.date === b.date ? a.channel.localeCompare(b.channel) : a.date.localeCompare(b.date)));
     setDailyStats(computed);
     setLoading(false);
-  }, [selectedMonth, site.id, supabase]);
+  }, [site.id, supabase]);
 
   useEffect(() => {
     async function initDefaultMonthFromData() {
@@ -251,15 +243,19 @@ export default function SiteDetail({ site }: { site: Site }) {
     return { timeLabels, rows };
   }, [dailyExcelData]);
 
+  const selectedMonthStats = useMemo(() => {
+    return dailyStats.filter((s) => s.date.startsWith(selectedMonth));
+  }, [dailyStats, selectedMonth]);
+
   const overviewMonthlyPreview = useMemo(() => {
-    return dailyStats
+    return selectedMonthStats
       .filter((s) => ["ch1", "ch2", "ch3"].includes(s.channel))
       .reduce<Record<string, Record<string, number>>>((acc, s) => {
         if (!acc[s.date]) acc[s.date] = {};
         acc[s.date][s.channel] = s.avg_value ?? 0;
         return acc;
       }, {});
-  }, [dailyStats]);
+  }, [selectedMonthStats]);
 
   const overviewChartData = Object.entries(overviewMonthlyPreview).map(([date, vals]) => ({
     date: date.slice(5),
@@ -269,7 +265,7 @@ export default function SiteDetail({ site }: { site: Site }) {
   }));
 
   const excelMonthlyChartData = useMemo(() => {
-    const rows = dailyStats
+    const rows = selectedMonthStats
       .filter((s) => ["ch1", "ch2", "ch3", "ch4", "ch5"].includes(s.channel))
       .reduce<Record<string, { date: string; ch1: number; ch2: number; ch3: number; ch4: number; ch5: number }>>((acc, s) => {
         if (!acc[s.date]) {
@@ -287,14 +283,14 @@ export default function SiteDetail({ site }: { site: Site }) {
     return Object.entries(rows)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, v]) => v);
-  }, [dailyStats]);
+  }, [selectedMonthStats]);
 
   const excelMonthlyTable = useMemo(() => {
     const [year, month] = selectedMonth.split("-");
     const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
     const dayLabels = Array.from({ length: daysInMonth }, (_, i) => String(i + 1).padStart(2, "0"));
 
-    const byChannelDate = dailyStats.reduce<Record<string, Record<string, number>>>((acc, s) => {
+    const byChannelDate = selectedMonthStats.reduce<Record<string, Record<string, number>>>((acc, s) => {
       if (!EXCEL_DISPLAY_CHANNELS.includes(s.channel as (typeof EXCEL_DISPLAY_CHANNELS)[number])) return acc;
       if (!acc[s.channel]) acc[s.channel] = {};
       const day = s.date.slice(-2);
@@ -316,7 +312,7 @@ export default function SiteDetail({ site }: { site: Site }) {
     });
 
     return { dayLabels, rows };
-  }, [dailyStats, selectedMonth]);
+  }, [selectedMonthStats, selectedMonth]);
 
   const downloadMonthlyExcel = useCallback(() => {
     const fixedTemplates: Record<string, string> = {
