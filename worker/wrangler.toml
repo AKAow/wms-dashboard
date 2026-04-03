@@ -1,0 +1,12 @@
+name = "wms-rld-worker"
+main = "index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+SUPABASE_URL = "https://gxngbvahywpaaavkkrfx.supabase.co"
+
+# 민감한 값은 secrets로 관리:
+# wrangler secret put NRG_CLIENT_ID
+# wrangler secret put NRG_CLIENT_SECRET
+# wrangler secret put SUPABASE_SERVICE_ROLE_KEY
