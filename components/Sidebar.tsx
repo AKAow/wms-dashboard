@@ -1,17 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import {
-  Wind,
-  LayoutDashboard,
-  MapPin,
-  Users,
-  Database,
-  Settings,
-  LogOut,
-} from "lucide-react";
+import { Wind, LayoutDashboard, MapPin, Users, Database, Settings, LogOut, Menu, X } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
@@ -25,20 +18,20 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const [open, setOpen] = useState(false);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    window.location.href = "/login/";
   };
 
   const isActive = (href: string) => {
-    if (href === "/dashboard") return pathname === "/dashboard";
+    if (href === "/dashboard") return pathname === "/dashboard" || pathname === "/dashboard/";
     return pathname.startsWith(href);
   };
 
-  return (
-    <aside className="fixed left-0 top-0 h-full w-56 bg-[#020617] border-r border-slate-800/60 flex flex-col z-50">
+  const NavContent = () => (
+    <>
       {/* 로고 */}
       <div className="p-5 border-b border-slate-800/60">
         <div className="flex items-center gap-2.5">
@@ -58,6 +51,7 @@ export default function Sidebar() {
           <Link
             key={href}
             href={href}
+            onClick={() => setOpen(false)}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
               isActive(href)
                 ? "bg-blue-600/20 text-blue-400 font-medium"
@@ -80,6 +74,42 @@ export default function Sidebar() {
           로그아웃
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* 모바일 햄버거 버튼 */}
+      <button
+        onClick={() => setOpen(true)}
+        className="fixed top-4 left-4 z-50 p-2 rounded-lg bg-[#020617] border border-slate-800 text-slate-400 hover:text-white md:hidden"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {/* 모바일 오버레이 */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/60 z-40 md:hidden"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      {/* 모바일 드로어 */}
+      <aside
+        className={`fixed left-0 top-0 h-full w-56 bg-[#020617] border-r border-slate-800/60 flex flex-col z-50 transition-transform duration-200
+          md:translate-x-0
+          ${open ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+      >
+        {/* 모바일 닫기 버튼 */}
+        <button
+          onClick={() => setOpen(false)}
+          className="absolute top-4 right-4 p-1 text-slate-500 hover:text-white md:hidden"
+        >
+          <X className="w-4 h-4" />
+        </button>
+        <NavContent />
+      </aside>
+    </>
   );
 }
