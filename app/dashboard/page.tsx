@@ -1,31 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { MapPin, Activity, RefreshCw, AlertCircle } from "lucide-react";
 import Link from "next/link";
-import type { Site, UploadHistory } from "@/lib/types";
-import { useRouter } from "next/navigation";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { useSites } from "@/hooks/useSites";
+import { useRecentUploads } from "@/hooks/useUploadHistory";
 
 export default function DashboardPage() {
-  const [sites, setSites] = useState<Site[]>([]);
-  const [uploads, setUploads] = useState<UploadHistory[]>([]);
   const supabase = createClient();
-  const router = useRouter();
+  const { sites, reload: loadSites } = useSites(supabase);
+  const { uploads, load: loadUploads } = useRecentUploads(supabase);
+
+  useAuthGuard(supabase);
 
   useEffect(() => {
-    async function fetchData() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return router.push("/login");
-
-      const { data: s } = await supabase.from("sites").select("*").order("name");
-      const { data: u } = await supabase.from("upload_history").select("*").order("created_at", { ascending: false }).limit(5);
-
-      if (s) setSites(s);
-      if (u) setUploads(u);
-    }
-    fetchData();
-  }, [router, supabase]);
+    void loadSites();
+    void loadUploads(5);
+  }, [loadSites, loadUploads]);
 
   const activeSites = sites.filter((s) => s.is_active).length;
   const lastUpload = uploads[0];

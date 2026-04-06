@@ -1,29 +1,20 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { RefreshCw, CheckCircle, XCircle, Clock } from "lucide-react";
-import type { UploadHistory } from "@/lib/types";
-import { useRouter } from "next/navigation";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { useUploadHistory } from "@/hooks/useUploadHistory";
 
 export default function DataPage() {
-  const [uploads, setUploads] = useState<(UploadHistory & { sites: { name: string } | null })[]>([]);
   const supabase = createClient();
-  const router = useRouter();
+  const { uploads, load } = useUploadHistory(supabase);
 
-  const loadHistory = useCallback(async () => {
-    const { data } = await supabase.from("upload_history").select("*, sites(name)").order("created_at", { ascending: false }).limit(50);
-    if (data) setUploads(data);
-  }, [supabase]);
+  useAuthGuard(supabase);
 
   useEffect(() => {
-    async function init() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return router.push("/login");
-      await loadHistory();
-    }
-    init();
-  }, [router, supabase, loadHistory]);
+    void load(50);
+  }, [load]);
 
   const statusIcon = (status: string) => {
     if (status === "success") return <CheckCircle className="w-4 h-4 text-green-400" />;

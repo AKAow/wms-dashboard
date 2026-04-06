@@ -7,6 +7,9 @@ import type { Site } from "@/lib/types";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteDetail from "./SiteDetail";
 import Modal from "@/components/Modal";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { useSites } from "@/hooks/useSites";
+import type { SitePayload } from "@/lib/services/sites.service";
 
 const WORKER_URL = "https://wms-rld-worker.aka-74b.workers.dev/upload-rld";
 
@@ -18,7 +21,6 @@ type SiteForm = {
 const emptyForm: SiteForm = { name: "", site_number: "", location_name: "", latitude: "", longitude: "", elevation: "", ipack_email: "", is_active: true };
 
 export default function SitesContent() {
-  const [sites, setSites] = useState<Site[]>([]);
   const [modal, setModal] = useState<"add" | "edit" | "rld" | null>(null);
   const [editSite, setEditSite] = useState<Site | null>(null);
   const [form, setForm] = useState<SiteForm>(emptyForm);
@@ -27,24 +29,16 @@ export default function SitesContent() {
   const [rldUploading, setRldUploading] = useState(false);
   const [rldResult, setRldResult] = useState<string>("");
   const supabase = createClient();
+  const { sites, reload, addSite, editSite: updateSiteById } = useSites(supabase);
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedId = searchParams.get("id");
 
-  const reload = async () => {
-    const { data } = await supabase.from("sites").select("*").order("name");
-    if (data) setSites(data);
-  };
+  useAuthGuard(supabase);
 
   useEffect(() => {
-    async function fetchData() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return router.push("/login");
-      await reload();
-    }
-    fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void reload();
+  }, [reload]);
 
   const openAdd = () => { setForm(emptyForm); setEditSite(null); setError(""); setModal("add"); };
   const openEdit = (site: Site) => {
@@ -55,19 +49,39 @@ export default function SitesContent() {
   };
 
   const handleSave = async () => {
-    if (!form.name || !form.site_number) { setError("사이트명과 사이트 번호는 필수입니다."); return; }
-    setSaving(true); setError("");
-    const payload = { name: form.name, site_number: form.site_number, location_name: form.location_name || null,
+    if (!form.name || !form.site_number) {
+      setError("사이트명과 사이트 번호는 필수입니다.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    const payload: SitePayload = {
+      name: form.name,
+      site_number: form.site_number,
+      location_name: form.location_name || null,
       latitude: form.latitude ? parseFloat(form.latitude) : null,
       longitude: form.longitude ? parseFloat(form.longitude) : null,
-      elevation: form.elevation ? parseInt(form.elevation) : null,
-      ipack_email: form.ipack_email || null, is_active: form.is_active };
-    const res = modal === "add"
-      ? await supabase.from("sites").insert(payload)
-      : editSite ? await supabase.from("sites").update(payload).eq("id", editSite.id) : null;
+      elevation: form.elevation ? parseInt(form.elevation, 10) : null,
+      ipack_email: form.ipack_email || null,
+      is_active: form.is_active,
+    };
+
+    const res =
+      modal === "add"
+        ? await addSite(payload)
+        : editSite
+          ? await updateSiteById(editSite.id, payload)
+          : null;
+
     setSaving(false);
-    if (res?.error) { setError(res.error.message); return; }
-    setModal(null); await reload();
+    if (res?.error) {
+      setError(res.error.message);
+      return;
+    }
+
+    setModal(null);
   };
 
   const handleRLD = async (file: File) => {
