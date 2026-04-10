@@ -1,20 +1,42 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { RefreshCw, CheckCircle, XCircle, Clock } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { useUploadHistory } from "@/hooks/useUploadHistory";
 
+const WORKER_BASE = "https://wms-rld-worker.aka-74b.workers.dev";
+
 export default function DataPage() {
   const supabase = createClient();
   const { uploads, load } = useUploadHistory(supabase);
+  const [syncDay, setSyncDay] = useState("수요일");
 
   useAuthGuard(supabase);
 
   useEffect(() => {
     void load(50);
   }, [load]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetch(`${WORKER_BASE}/cron-config`, { cache: "no-store" });
+        const d = (await r.json()) as { ok?: boolean; dayKst?: string };
+        if (alive && r.ok && d?.ok && d.dayKst) {
+          setSyncDay(d.dayKst);
+        }
+      } catch {
+        // noop: fallback to default
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const statusIcon = (status: string) => {
     if (status === "success") return <CheckCircle className="w-4 h-4 text-green-400" />;
@@ -38,7 +60,7 @@ export default function DataPage() {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4 text-sm mt-4">
-          {[["연동 계정", "windtreeeng@gmail.com"], ["동기화 주기", "주 1회 (수요일 06:00)"], ["마지막 실행", uploads[0] ? new Date(uploads[0].created_at).toLocaleString("ko") : "-"], ["상태", "활성"]].map(([l, v]) => (
+          {[["연동 계정", "windtreeeng@gmail.com"], ["동기화 주기", `주 1회 (${syncDay} 06:00)`], ["마지막 실행", uploads[0] ? new Date(uploads[0].created_at).toLocaleString("ko") : "-"], ["상태", "활성"]].map(([l, v]) => (
             <div key={l}>
               <p className="text-xs text-slate-500 mb-0.5">{l}</p>
               <p className={`text-sm ${l === "상태" ? "text-green-400 font-medium" : "text-slate-300"}`}>{v}</p>
