@@ -8,6 +8,8 @@ export interface Site {
   elevation: number | null;
   location_name: string | null;
   ipack_email: string | null;
+  gmail_sync_enabled: boolean;
+  gmail_query: string | null;
   is_active: boolean;
   created_at: string;
 }

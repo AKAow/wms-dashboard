@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS sites (
   elevation INTEGER,
   location_name TEXT,
   ipack_email TEXT,
+  gmail_sync_enabled BOOLEAN DEFAULT false,
+  gmail_query TEXT,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -64,6 +66,10 @@ CREATE TABLE IF NOT EXISTS upload_history (
   error_message TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 기존 운영 DB 마이그레이션(안전)
+ALTER TABLE sites ADD COLUMN IF NOT EXISTS gmail_sync_enabled BOOLEAN DEFAULT false;
+ALTER TABLE sites ADD COLUMN IF NOT EXISTS gmail_query TEXT;
 
 -- RLS 활성화
 ALTER TABLE sites ENABLE ROW LEVEL SECURITY;
@@ -136,7 +142,7 @@ CREATE POLICY "daily_stats_select" ON daily_stats
   );
 
 -- 샘플 데이터
-INSERT INTO sites (name, site_number, location_name, latitude, longitude, elevation, ipack_email, is_active)
+INSERT INTO sites (name, site_number, location_name, latitude, longitude, elevation, ipack_email, gmail_sync_enabled, gmail_query, is_active)
 VALUES
-  ('Wando Daesin', '017546', 'Junnam Wando', 34.3389216, 126.6761300, 325, '447498801685@packet-mail.net', true)
+  ('Wando Daesin', '017546', 'Junnam Wando', 34.3389216, 126.6761300, 325, '447498801685@packet-mail.net', false, null, true)
 ON CONFLICT (site_number) DO NOTHING;

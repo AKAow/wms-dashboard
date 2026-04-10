@@ -55,12 +55,12 @@ export default function DataPage() {
         <div className="flex items-center gap-3 mb-3">
           <div className="p-2 rounded-lg bg-blue-400/10"><RefreshCw className="w-5 h-5 text-blue-400" /></div>
           <div>
-            <h3 className="text-sm font-semibold text-white">Gmail 자동 동기화</h3>
-            <p className="text-xs text-slate-400">iPack 발송 RLD를 자동 감지하여 처리</p>
+            <h3 className="text-sm font-semibold text-white">사이트별 자동 동기화</h3>
+            <p className="text-xs text-slate-400">각 사이트 설정에 따라 RLD 메일을 자동 감지하여 처리</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4 text-sm mt-4">
-          {[["연동 계정", "windtreeeng@gmail.com"], ["동기화 주기", `주 1회 (${syncDay} 06:00)`], ["마지막 실행", uploads[0] ? new Date(uploads[0].created_at).toLocaleString("ko") : "-"], ["상태", "활성"]].map(([l, v]) => (
+          {[["동기화 방식", "사이트별 설정"], ["동기화 주기", `주 1회 (${syncDay} 06:00)`], ["마지막 실행", uploads[0] ? new Date(uploads[0].created_at).toLocaleString("ko") : "-"], ["상태", "활성"]].map(([l, v]) => (
             <div key={l}>
               <p className="text-xs text-slate-500 mb-0.5">{l}</p>
               <p className={`text-sm ${l === "상태" ? "text-green-400 font-medium" : "text-slate-300"}`}>{v}</p>

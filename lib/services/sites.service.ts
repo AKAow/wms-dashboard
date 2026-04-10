@@ -9,6 +9,8 @@ export type SitePayload = {
   longitude: number | null;
   elevation: number | null;
   ipack_email: string | null;
+  gmail_sync_enabled: boolean;
+  gmail_query: string | null;
   is_active: boolean;
 };
 

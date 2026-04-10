@@ -16,9 +16,23 @@ const WORKER_URL = "https://wms-rld-worker.aka-74b.workers.dev/upload-rld";
 type SiteForm = {
   name: string; site_number: string; location_name: string;
   latitude: string; longitude: string; elevation: string;
-  ipack_email: string; is_active: boolean;
+  ipack_email: string;
+  gmail_sync_enabled: boolean;
+  gmail_query: string;
+  is_active: boolean;
 };
-const emptyForm: SiteForm = { name: "", site_number: "", location_name: "", latitude: "", longitude: "", elevation: "", ipack_email: "", is_active: true };
+const emptyForm: SiteForm = {
+  name: "",
+  site_number: "",
+  location_name: "",
+  latitude: "",
+  longitude: "",
+  elevation: "",
+  ipack_email: "",
+  gmail_sync_enabled: false,
+  gmail_query: "",
+  is_active: true,
+};
 
 export default function SitesContent() {
   const [modal, setModal] = useState<"add" | "edit" | "rld" | null>(null);
@@ -42,9 +56,18 @@ export default function SitesContent() {
 
   const openAdd = () => { setForm(emptyForm); setEditSite(null); setError(""); setModal("add"); };
   const openEdit = (site: Site) => {
-    setForm({ name: site.name, site_number: site.site_number, location_name: site.location_name ?? "",
-      latitude: site.latitude?.toString() ?? "", longitude: site.longitude?.toString() ?? "",
-      elevation: site.elevation?.toString() ?? "", ipack_email: site.ipack_email ?? "", is_active: site.is_active });
+    setForm({
+      name: site.name,
+      site_number: site.site_number,
+      location_name: site.location_name ?? "",
+      latitude: site.latitude?.toString() ?? "",
+      longitude: site.longitude?.toString() ?? "",
+      elevation: site.elevation?.toString() ?? "",
+      ipack_email: site.ipack_email ?? "",
+      gmail_sync_enabled: site.gmail_sync_enabled ?? false,
+      gmail_query: site.gmail_query ?? "",
+      is_active: site.is_active,
+    });
     setEditSite(site); setError(""); setModal("edit");
   };
 
@@ -65,6 +88,8 @@ export default function SitesContent() {
       longitude: form.longitude ? parseFloat(form.longitude) : null,
       elevation: form.elevation ? parseInt(form.elevation, 10) : null,
       ipack_email: form.ipack_email || null,
+      gmail_sync_enabled: form.gmail_sync_enabled,
+      gmail_query: form.gmail_query.trim() || null,
       is_active: form.is_active,
     };
 
@@ -225,6 +250,23 @@ export default function SitesContent() {
             </div>
             <div><label className="block text-xs text-slate-400 mb-1">iPack 이메일</label>
               <input className={inp} value={form.ipack_email} onChange={e => setForm({...form,ipack_email:e.target.value})} placeholder="447498801685@packet-mail.net" /></div>
+
+            <div className="rounded-xl border border-slate-800/60 bg-[#020617]/40 p-3 space-y-3">
+              <p className="text-xs font-semibold text-slate-300">사이트별 Gmail 동기화 설정</p>
+              <div className="flex items-center justify-between">
+                <label className="text-sm text-slate-400">자동 동기화 사용</label>
+                <button onClick={() => setForm({...form,gmail_sync_enabled:!form.gmail_sync_enabled})}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${form.gmail_sync_enabled ? "bg-blue-600" : "bg-slate-700"}`}>
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${form.gmail_sync_enabled ? "translate-x-5" : "translate-x-0.5"}`} />
+                </button>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Gmail 검색 조건(선택)</label>
+                <input className={inp} value={form.gmail_query} onChange={e => setForm({...form,gmail_query:e.target.value})} placeholder="from:packet-mail.net newer_than:14d" />
+                <p className="text-[11px] text-slate-500 mt-1">비워두면 이 사이트 번호 기준으로 자동 검색합니다.</p>
+              </div>
+            </div>
+
             <div className="flex items-center gap-3">
               <label className="text-sm text-slate-400">활성 상태</label>
               <button onClick={() => setForm({...form,is_active:!form.is_active})}
