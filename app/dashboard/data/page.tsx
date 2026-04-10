@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { RefreshCw, CheckCircle, XCircle, Clock } from "lucide-react";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
@@ -12,11 +12,12 @@ export default function DataPage() {
   const supabase = createClient();
   const { uploads, load } = useUploadHistory(supabase);
   const [syncDay, setSyncDay] = useState("수요일");
+  const [selectedSite, setSelectedSite] = useState<string>("all");
 
   useAuthGuard(supabase);
 
   useEffect(() => {
-    void load(50);
+    void load(200);
   }, [load]);
 
   useEffect(() => {
@@ -43,6 +44,30 @@ export default function DataPage() {
     if (status === "failed") return <XCircle className="w-4 h-4 text-red-400" />;
     return <Clock className="w-4 h-4 text-yellow-400" />;
   };
+
+  const siteOptions = useMemo(() => {
+    const names = Array.from(new Set(uploads.map((u) => u.sites?.name).filter(Boolean) as string[]));
+    return names.sort((a, b) => a.localeCompare(b, "ko"));
+  }, [uploads]);
+
+  const filteredUploads = useMemo(() => {
+    if (selectedSite === "all") return uploads;
+    return uploads.filter((u) => (u.sites?.name ?? "-") === selectedSite);
+  }, [uploads, selectedSite]);
+
+  const siteSummary = useMemo(() => {
+    const map = new Map<string, { total: number; success: number; failed: number; latest: string | null }>();
+    for (const u of uploads) {
+      const name = u.sites?.name ?? "미지정";
+      if (!map.has(name)) map.set(name, { total: 0, success: 0, failed: 0, latest: null });
+      const s = map.get(name)!;
+      s.total += 1;
+      if (u.status === "success") s.success += 1;
+      if (u.status === "failed") s.failed += 1;
+      if (!s.latest || new Date(u.created_at) > new Date(s.latest)) s.latest = u.created_at;
+    }
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], "ko"));
+  }, [uploads]);
 
   return (
     <div className="space-y-5">
@@ -72,10 +97,43 @@ export default function DataPage() {
         </p>
       </div>
 
+      <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-white">사이트별 데이터 현황</h2>
+          <span className="text-xs text-slate-500">{siteSummary.length}개 사이트</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {siteSummary.length === 0 ? (
+            <p className="text-sm text-slate-500">사이트별 데이터가 없습니다.</p>
+          ) : (
+            siteSummary.map(([name, s]) => (
+              <div key={name} className="rounded-lg border border-slate-800/60 bg-[#020617]/40 p-3">
+                <p className="text-sm text-white font-medium">{name}</p>
+                <p className="text-xs text-slate-400 mt-1">총 {s.total}건 · 성공 {s.success}건 · 실패 {s.failed}건</p>
+                <p className="text-xs text-slate-500 mt-1">최근 반영: {s.latest ? new Date(s.latest).toLocaleString("ko") : "-"}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
       <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] overflow-hidden">
-        <div className="p-4 border-b border-slate-800/60 flex items-center justify-between">
+        <div className="p-4 border-b border-slate-800/60 flex items-center justify-between gap-3 flex-wrap">
           <h2 className="text-sm font-semibold text-white">업로드 이력</h2>
-          <span className="text-xs text-slate-500">{uploads.length}건</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">사이트</span>
+            <select
+              value={selectedSite}
+              onChange={(e) => setSelectedSite(e.target.value)}
+              className="rounded-lg border border-slate-700 bg-[#020617] px-3 py-1.5 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
+            >
+              <option value="all">전체</option>
+              {siteOptions.map((site) => (
+                <option key={site} value={site}>{site}</option>
+              ))}
+            </select>
+            <span className="text-xs text-slate-500">{filteredUploads.length}건</span>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px]">
@@ -87,10 +145,10 @@ export default function DataPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/40">
-              {uploads.length === 0 ? (
+              {filteredUploads.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">업로드 이력이 없습니다</td></tr>
               ) : (
-                uploads.map((u) => (
+                filteredUploads.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-800/20 transition-colors">
                     <td className="px-4 py-3">{statusIcon(u.status)}</td>
                     <td className="px-4 py-3 text-xs font-mono text-slate-300 max-w-[160px] truncate">{u.file_name ?? "-"}</td>

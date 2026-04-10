@@ -253,11 +253,13 @@ export default function SitesContent() {
 
             <div className="rounded-xl border border-slate-800/60 bg-[#020617]/40 p-3 space-y-3">
               <p className="text-xs font-semibold text-slate-300">사이트별 Gmail 동기화 설정</p>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <label className="text-sm text-slate-400">자동 동기화 사용</label>
-                <button onClick={() => setForm({...form,gmail_sync_enabled:!form.gmail_sync_enabled})}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${form.gmail_sync_enabled ? "bg-blue-600" : "bg-slate-700"}`}>
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${form.gmail_sync_enabled ? "translate-x-5" : "translate-x-0.5"}`} />
+                <button
+                  type="button"
+                  onClick={() => setForm({...form,gmail_sync_enabled:!form.gmail_sync_enabled})}
+                  className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${form.gmail_sync_enabled ? "bg-blue-600" : "bg-slate-700"}`}>
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${form.gmail_sync_enabled ? "translate-x-5" : "translate-x-0.5"}`} />
                 </button>
               </div>
               <div>
@@ -267,18 +269,20 @@ export default function SitesContent() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between gap-3">
               <label className="text-sm text-slate-400">활성 상태</label>
-              <button onClick={() => setForm({...form,is_active:!form.is_active})}
-                className={`relative w-10 h-5 rounded-full transition-colors ${form.is_active ? "bg-blue-600" : "bg-slate-700"}`}>
-                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${form.is_active ? "translate-x-5" : "translate-x-0.5"}`} />
+              <button
+                type="button"
+                onClick={() => setForm({...form,is_active:!form.is_active})}
+                className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${form.is_active ? "bg-blue-600" : "bg-slate-700"}`}>
+                <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${form.is_active ? "translate-x-5" : "translate-x-0.5"}`} />
               </button>
             </div>
             {error && <p className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">{error}</p>}
-            <div className="flex gap-3 pt-1">
-              <button onClick={() => setModal(null)} className="flex-1 py-2.5 rounded-xl border border-slate-700 text-sm text-slate-400 hover:text-white transition-colors">취소</button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <button onClick={() => setModal(null)} className="w-full py-2.5 rounded-xl border border-slate-700 text-sm text-slate-400 hover:text-white transition-colors">취소</button>
               <button onClick={handleSave} disabled={saving}
-                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-medium text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-medium text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" />저장 중...</> : "저장"}
               </button>
             </div>
