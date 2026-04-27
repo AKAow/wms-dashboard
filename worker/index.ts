@@ -391,12 +391,18 @@ async function runScheduledSync(env: Env): Promise<Response> {
   let checkedMessages = 0;
   const results: any[] = [];
 
-  for (const site of targets) {
+  // Cloudflare subrequest budget 보호 (1101 방지)
+  const MAX_SITES_PER_RUN = 8;
+  const MAX_MESSAGES_PER_SITE = 20;
+  const MAX_ATTACHMENTS_PER_SITE = 1;
+  const limitedTargets = targets.slice(0, MAX_SITES_PER_RUN);
+
+  for (const site of limitedTargets) {
     const siteQuery = site.gmail_query?.trim();
     const defaultQuery = `has:attachment filename:rld filename:${site.site_number}_ newer_than:14d`;
     const q = encodeURIComponent(siteQuery && siteQuery.length > 0 ? siteQuery : defaultQuery);
 
-    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(user)}/messages?q=${q}&maxResults=20`;
+    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(user)}/messages?q=${q}&maxResults=${MAX_MESSAGES_PER_SITE}`;
     const listRes = await fetch(listUrl, { headers: auth });
     if (!listRes.ok) {
       const txt = await listRes.text();
@@ -405,10 +411,13 @@ async function runScheduledSync(env: Env): Promise<Response> {
     }
 
     const list = (await listRes.json()) as { messages?: { id: string }[] };
-    const msgs = list.messages || [];
+    const msgs = (list.messages || []).slice(0, MAX_MESSAGES_PER_SITE);
     checkedMessages += msgs.length;
 
+    let processedForSite = 0;
     for (const m of msgs) {
+      if (processedForSite >= MAX_ATTACHMENTS_PER_SITE) break;
+
       const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(user)}/messages/${m.id}?format=full`, { headers: auth });
       if (!msgRes.ok) continue;
       const msg = (await msgRes.json()) as any;
@@ -424,6 +433,7 @@ async function runScheduledSync(env: Env): Promise<Response> {
         const already = await hasUploadHistory(env, fileName);
         if (already) {
           skipped++;
+          results.push({ ok: true, skipped: true, reason: "already-uploaded", site_id: site.id, site_number: site.site_number, file_name: fileName });
           continue;
         }
 
@@ -439,6 +449,7 @@ async function runScheduledSync(env: Env): Promise<Response> {
           const buf = fromBase64UrlToArrayBuffer(att.data);
           const r = await processRldFile(env, fileName, buf, "gmail-cron");
           processed++;
+          processedForSite++;
           results.push({ ...r, site_id: site.id, site_number: site.site_number });
         } catch (e: unknown) {
           results.push({
@@ -453,7 +464,7 @@ async function runScheduledSync(env: Env): Promise<Response> {
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, processed, skipped, checked_messages: checkedMessages, enabled_sites: targets.length, results }));
+  return new Response(JSON.stringify({ ok: true, processed, skipped, checked_messages: checkedMessages, enabled_sites: targets.length, scanned_sites: limitedTargets.length, results }));
 }
 
 export default {

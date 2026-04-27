@@ -3,8 +3,13 @@ main = "index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
+[triggers]
+crons = ["0 21 * * 2"] # 수요일 06:00 KST
+
 [vars]
 SUPABASE_URL = "https://gxngbvahywpaaavkkrfx.supabase.co"
+CLOUDFLARE_ACCOUNT_ID = "74b987486891af37bb30b991c9d86b95"
+CLOUDFLARE_SCRIPT_NAME = "wms-rld-worker"
 
 # 민감한 값은 secrets로 관리:
 # wrangler secret put NRG_CLIENT_ID
