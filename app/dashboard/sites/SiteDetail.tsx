@@ -113,6 +113,7 @@ function MiniSparkline({ points, color = "#2f80ed" }: { points: number[]; color?
 
 export default function SiteDetail({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
+  const [overviewPeriod, setOverviewPeriod] = useState<7 | 14 | 30>(14);
   const [selectedDate, setSelectedDate] = useState(formatKSTDate());
   const [selectedMonth, setSelectedMonth] = useState(formatKSTMonth());
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -288,7 +289,13 @@ export default function SiteDetail({ site }: { site: Site }) {
     ch1: vals.ch1 ?? 0,
     ch2: vals.ch2 ?? 0,
     ch3: vals.ch3 ?? 0,
+    ch4: vals.ch4 ?? 0,
+    ch5: vals.ch5 ?? 0,
   }));
+
+  const overviewChartSeries = useMemo(() => {
+    return overviewChartData.slice(-overviewPeriod);
+  }, [overviewChartData, overviewPeriod]);
 
   const excelMonthlyChartData = useMemo(() => {
     const rows = selectedMonthStats
@@ -425,6 +432,17 @@ export default function SiteDetail({ site }: { site: Site }) {
   const sparkSync = useMemo(() => monthRows.slice(-12).map((r) => (r.avg_value != null ? 1 : 0)), [monthRows]);
   const sparkFail = useMemo(() => monthRows.slice(-12).map((r) => (r.std_value != null && r.std_value > 3 ? 1 : 0)), [monthRows]);
 
+  const sensorWindRows = useMemo(() => {
+    const speedChannels = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"] as const;
+    return speedChannels.map((ch) => {
+      const rows = monthRows.filter((r) => r.channel === ch && typeof r.avg_value === "number");
+      const values = rows.map((r) => r.avg_value as number);
+      const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+      const latest = values.length ? values[values.length - 1] : null;
+      return { ch, label: CHANNEL_LABELS[ch], avg, latest };
+    });
+  }, [monthRows]);
+
   return (
     <div className="space-y-6 sitekit">
       <div className="topbar">
@@ -487,12 +505,19 @@ export default function SiteDetail({ site }: { site: Site }) {
 
           <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr] gap-4">
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
-              <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />엑셀 기준 월간 풍속 비교</h3>
-              {overviewChartData.length === 0 ? (
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />센서별 풍속 Output</h3>
+                <div className="seg">
+                  {[7, 14, 30].map((p) => (
+                    <span key={p} className={overviewPeriod === p ? "on" : ""} onClick={() => setOverviewPeriod(p as 7 | 14 | 30)}>{p}D</span>
+                  ))}
+                </div>
+              </div>
+              {overviewChartSeries.length === 0 ? (
                 <div className="text-sm text-slate-500 py-10 text-center">월간 데이터가 없습니다</div>
               ) : (
                 <ResponsiveContainer width="100%" height={280}>
-                  <LineChart data={overviewChartData}>
+                  <LineChart data={overviewChartSeries}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
                     <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
                     <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
@@ -501,16 +526,22 @@ export default function SiteDetail({ site }: { site: Site }) {
                     <Line type="monotone" dataKey="ch1" name="100m 풍속" stroke={CHART_COLORS.ch1} dot={false} strokeWidth={2} />
                     <Line type="monotone" dataKey="ch2" name="96m 풍속" stroke={CHART_COLORS.ch2} dot={false} strokeWidth={2} />
                     <Line type="monotone" dataKey="ch3" name="80m 풍속" stroke={CHART_COLORS.ch3} dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="ch4" name="80m 풍속(S)" stroke={CHART_COLORS.ch4} dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="ch5" name="60m 풍속" stroke={CHART_COLORS.ch5} dot={false} strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-4">
-              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-400" />사이트 정보</h3>
-              <div className="space-y-3 text-sm">
-                {[["사이트 번호", site.site_number], ["위치명", site.location_name ?? "-"], ["위도", site.latitude != null ? `${toFixedOrDash(site.latitude, 6)}° N` : "-"], ["경도", site.longitude != null ? `${toFixedOrDash(site.longitude, 6)}° E` : "-"], ["고도", site.elevation != null ? `${toFixedOrDash(site.elevation, 1)} m` : "-"], ["iPack", site.ipack_email ?? "-"]].map(([l, v]) => (
-                  <div key={l} className="flex justify-between gap-4"><span className="text-slate-500">{l}</span><span className="text-slate-800 font-mono text-xs text-right">{v}</span></div>
+              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400" />센서별 풍속</h3>
+              <div className="space-y-2">
+                {sensorWindRows.map((row) => (
+                  <div key={row.ch} className="rounded-lg border border-[#d6e8ff] bg-white/70 px-3 py-2">
+                    <div className="flex items-center justify-between text-xs"><span className="text-blue-500 font-mono">{row.ch}</span><span className="text-slate-500">{row.label}</span></div>
+                    <div className="mt-1 flex items-center justify-between text-sm"><span className="text-slate-700">Avg</span><span className="font-semibold text-slate-900">{toFixedOrDash(row.avg, 2)} m/s</span></div>
+                    <div className="mt-0.5 flex items-center justify-between text-sm"><span className="text-slate-700">Latest</span><span className="font-medium text-slate-800">{toFixedOrDash(row.latest, 2)} m/s</span></div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -539,10 +570,10 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-4">
-              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400" />센서 구성</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {Object.entries(CHANNEL_LABELS).map(([ch, label]) => (
-                  <div key={ch} className="flex items-center gap-2 text-xs"><span className="text-blue-500 font-mono w-8">{ch}</span><span className="text-slate-600">{label}</span></div>
+              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-400" />사이트 정보</h3>
+              <div className="space-y-3 text-sm">
+                {[["사이트 번호", site.site_number], ["위치명", site.location_name ?? "-"], ["위도", site.latitude != null ? `${toFixedOrDash(site.latitude, 6)}° N` : "-"], ["경도", site.longitude != null ? `${toFixedOrDash(site.longitude, 6)}° E` : "-"], ["고도", site.elevation != null ? `${toFixedOrDash(site.elevation, 1)} m` : "-"], ["iPack", site.ipack_email ?? "-"]].map(([l, v]) => (
+                  <div key={l} className="flex justify-between gap-4"><span className="text-slate-500">{l}</span><span className="text-slate-800 font-mono text-xs text-right">{v}</span></div>
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-2 pt-1">

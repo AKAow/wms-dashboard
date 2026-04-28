@@ -84,3 +84,6 @@ body {
 .sitekit .k-delta.flat { color:#64748b; background:rgba(155,174,200,0.16); }
 .sitekit .k-icon { position:absolute; top:18px; right:20px; width:34px; height:34px; border-radius:10px; background:#e9f2ff; color:#2f80ed; display:flex; align-items:center; justify-content:center; }
 .sitekit .k-icon svg { width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:1.75; }
+.sitekit .seg { display:inline-flex; padding:3px; background:rgba(255,255,255,0.6); border:1px solid #d6e8ff; border-radius:10px; font-size:12px; }
+.sitekit .seg span { padding:5px 11px; border-radius:7px; color:#64748b; cursor:pointer; font-weight:500; }
+.sitekit .seg span.on { background:#fff; color:#0a2540; box-shadow:0 2px 8px rgba(10,37,64,0.08); }
