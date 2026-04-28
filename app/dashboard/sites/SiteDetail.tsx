@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { MapPin, Activity, Wind, Navigation, BarChart2, Table2, CalendarDays } from "lucide-react";
+import { MapPin, Activity, Wind, Navigation, BarChart2, Table2, CalendarDays, Search, Bell, Download } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import * as XLSX from "xlsx";
 import type { Site, DailyStat, Measurement } from "@/lib/types";
@@ -426,22 +426,24 @@ export default function SiteDetail({ site }: { site: Site }) {
   const sparkFail = useMemo(() => monthRows.slice(-12).map((r) => (r.std_value != null && r.std_value > 3 ? 1 : 0)), [monthRows]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="text-sm text-slate-500">Site Dashboard · Customer View</div>
+    <div className="space-y-6 sitekit">
+      <div className="topbar">
+        <div className="crumbs"><b>Overview</b> · {site.site_number}</div>
+        <div className="search">
+          <Search size={14} />
+          <input placeholder="Search data, channels, alerts…" />
+        </div>
+        <button className="topbar-btn" title="Notifications"><Bell size={16} /></button>
       </div>
 
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div className="page-head">
         <div>
-          <div className="flex items-center gap-2 mb-1"><MapPin className="w-4 h-4 text-blue-400" /><h1 className="text-3xl font-bold tracking-tight text-slate-900">{site.name}</h1></div>
-          <p className="text-sm text-slate-500">{site.site_number} · {site.location_name ?? "위치 미입력"} · 최근 동기화 {latestDataDate}</p>
+          <h1>{site.name}</h1>
+          <div className="sub">{site.location_name ?? "위치 미입력"} · 최근 동기화 {latestDataDate}</div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setTab("monthly")} className="rounded-xl border border-[#c8def8] bg-white/80 px-4 py-2 text-sm text-slate-700 hover:bg-blue-50">월간 통계</button>
-          <button onClick={downloadMonthlyExcel} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500">엑셀 다운로드</button>
-          <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full ${site.is_active ? "bg-green-400/10 text-green-500" : "bg-slate-200 text-slate-600"}`}>
-            <Activity className="w-3 h-3" />{site.is_active ? "활성" : "비활성"}
-          </span>
+        <div className="actions">
+          <button onClick={() => setTab("monthly")} className="btn btn-secondary">월간 통계</button>
+          <button onClick={downloadMonthlyExcel} className="btn btn-primary"><Download size={15} />Export report</button>
         </div>
       </div>
 
@@ -456,26 +458,30 @@ export default function SiteDetail({ site }: { site: Site }) {
 
       {tab === "overview" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            <div className="rounded-2xl border border-[#d6e8ff] bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_24px_rgba(10,37,64,0.06)]">
-              <p className="text-[11px] text-slate-500 uppercase">Wind · avg ({selectedMonth})</p>
-              <p className="text-4xl font-semibold text-slate-900 mt-2 leading-none">{toFixedOrDash(monthAvgWind, 2)}<span className="text-sm text-slate-500 ml-1">m/s</span></p>
-              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">▲ 0.0%</span><MiniSparkline points={sparkWind} color="#2f80ed" /></div>
+          <div className="kpi-row">
+            <div className="kpi-card">
+              <div className="k-icon"><Wind size={16} /></div>
+              <div className="k-label">Wind · avg</div>
+              <div className="k-num">{toFixedOrDash(monthAvgWind, 2)}<span className="u">m/s</span></div>
+              <div className="k-foot"><span className="k-delta flat">— steady</span><MiniSparkline points={sparkWind} color="#2f80ed" /></div>
             </div>
-            <div className="rounded-2xl border border-[#d6e8ff] bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_24px_rgba(10,37,64,0.06)]">
-              <p className="text-[11px] text-slate-500 uppercase">Data coverage</p>
-              <p className="text-4xl font-semibold text-slate-900 mt-2 leading-none">{monthCoverage}<span className="text-sm text-slate-500 ml-1">%</span></p>
-              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">▲ monthly</span><MiniSparkline points={sparkCoverage} color="#10b981" /></div>
+            <div className="kpi-card">
+              <div className="k-icon"><BarChart2 size={16} /></div>
+              <div className="k-label">Data coverage</div>
+              <div className="k-num">{monthCoverage}<span className="u">%</span></div>
+              <div className="k-foot"><span className="k-delta up">▲ monthly</span><MiniSparkline points={sparkCoverage} color="#10b981" /></div>
             </div>
-            <div className="rounded-2xl border border-[#d6e8ff] bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_24px_rgba(10,37,64,0.06)]">
-              <p className="text-[11px] text-slate-500 uppercase">Latest sync</p>
-              <p className="text-3xl font-semibold text-slate-900 mt-2 leading-none">{latestDataDate}</p>
-              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">▲ synced</span><MiniSparkline points={sparkSync} color="#8b5cf6" /></div>
+            <div className="kpi-card">
+              <div className="k-icon"><Activity size={16} /></div>
+              <div className="k-label">Latest sync</div>
+              <div className="k-num" style={{fontSize: "30px"}}>{latestDataDate}</div>
+              <div className="k-foot"><span className="k-delta up">▲ synced</span><MiniSparkline points={sparkSync} color="#8b5cf6" /></div>
             </div>
-            <div className="rounded-2xl border border-[#d6e8ff] bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_24px_rgba(10,37,64,0.06)]">
-              <p className="text-[11px] text-slate-500 uppercase">Quality trend</p>
-              <p className="text-4xl font-semibold text-slate-900 mt-2 leading-none">{new Set(monthRows.filter((r) => r.channel === "ch1").map((r) => r.date)).size}<span className="text-sm text-slate-500 ml-1">days</span></p>
-              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-50 text-rose-700">▼ risk</span><MiniSparkline points={sparkFail} color="#ef4444" /></div>
+            <div className="kpi-card">
+              <div className="k-icon"><MapPin size={16} /></div>
+              <div className="k-label">Observed days</div>
+              <div className="k-num">{new Set(monthRows.filter((r) => r.channel === "ch1").map((r) => r.date)).size}<span className="u">days</span></div>
+              <div className="k-foot"><span className="k-delta down">▼ risk</span><MiniSparkline points={sparkFail} color="#ef4444" /></div>
             </div>
           </div>
 
