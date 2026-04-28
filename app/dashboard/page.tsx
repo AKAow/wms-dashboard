@@ -33,34 +33,34 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* 헤더 */}
       <div>
-        <h1 className="text-2xl font-bold text-white">대시보드</h1>
-        <p className="text-sm text-slate-400 mt-1">기상 측정 사이트 현황</p>
+        <h1 className="text-2xl font-bold text-slate-900">대시보드</h1>
+        <p className="text-sm text-slate-500 mt-1">기상 측정 사이트 현황</p>
       </div>
 
       {/* 통계 카드 */}
       <div className="grid grid-cols-3 gap-4">
         {stats.map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
+          <div key={label} className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-slate-400 font-medium">{label}</span>
+              <span className="text-xs text-slate-500 font-medium">{label}</span>
               <div className={`p-2 rounded-lg ${bg}`}>
                 <Icon className={`w-4 h-4 ${color}`} />
               </div>
             </div>
-            <p className="text-2xl font-bold text-white">{value}</p>
+            <p className="text-2xl font-bold text-slate-900">{value}</p>
           </div>
         ))}
       </div>
 
       {/* 사이트 목록 */}
-      <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] overflow-hidden">
-        <div className="p-5 border-b border-slate-800/60">
-          <h2 className="text-sm font-semibold text-white">사이트 목록</h2>
+      <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
+        <div className="p-5 border-b border-[#d6e8ff]">
+          <h2 className="text-sm font-semibold text-slate-900">사이트 목록</h2>
         </div>
-        <div className="divide-y divide-slate-800/40">
+        <div className="divide-y divide-[#d6e8ff]/70">
           {sites.length === 0 ? (
             <div className="p-8 text-center">
-              <AlertCircle className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+              <AlertCircle className="w-8 h-8 text-slate-500 mx-auto mb-3" />
               <p className="text-sm text-slate-500">등록된 사이트가 없습니다</p>
               <Link href="/dashboard/sites" className="text-xs text-blue-400 hover:underline mt-1 inline-block">
                 사이트 추가하기 →
@@ -76,7 +76,7 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-3">
                   <div className={`w-2 h-2 rounded-full ${site.is_active ? "bg-green-400" : "bg-slate-600"}`} />
                   <div>
-                    <p className="text-sm font-medium text-white">{site.name}</p>
+                    <p className="text-sm font-medium text-slate-900">{site.name}</p>
                     <p className="text-xs text-slate-500">{site.site_number} · {site.location_name ?? "위치 미설정"}</p>
                   </div>
                 </div>
@@ -86,7 +86,7 @@ export default function DashboardPage() {
                       {site.latitude.toFixed(4)}°N, {site.longitude.toFixed(4)}°E
                     </p>
                   ) : (
-                    <p className="text-xs text-slate-600">좌표 미설정</p>
+                    <p className="text-xs text-slate-500">좌표 미설정</p>
                   )}
                 </div>
               </Link>
@@ -96,19 +96,19 @@ export default function DashboardPage() {
       </div>
 
       {/* 최근 업로드 이력 */}
-      <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] overflow-hidden">
-        <div className="p-5 border-b border-slate-800/60 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">최근 데이터 업로드</h2>
+      <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
+        <div className="p-5 border-b border-[#d6e8ff] flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-900">최근 데이터 업로드</h2>
           <Link href="/dashboard/data" className="text-xs text-blue-400 hover:underline">전체 보기</Link>
         </div>
-        <div className="divide-y divide-slate-800/40">
+        <div className="divide-y divide-[#d6e8ff]/70">
           {uploads.length === 0 ? (
             <div className="p-6 text-center text-sm text-slate-500">업로드 이력이 없습니다</div>
           ) : (
             uploads.map((u) => (
               <div key={u.id} className="flex items-center justify-between px-4 py-3">
                 <div>
-                  <p className="text-sm text-white">{u.file_name ?? "이름 없음"}</p>
+                  <p className="text-sm text-slate-900">{u.file_name ?? "이름 없음"}</p>
                   <p className="text-xs text-slate-500">{u.source} · {new Date(u.created_at).toLocaleString("ko")}</p>
                 </div>
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${

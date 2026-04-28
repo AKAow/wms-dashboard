@@ -34,7 +34,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0e17] relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-[linear-gradient(180deg,#f5faff_0%,#eaf4ff_100%)] relative overflow-hidden">
       {/* 배경 효과 */}
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:40px_40px] opacity-30" />
@@ -47,22 +47,22 @@ export default function LoginPage() {
         {/* 헤더 */}
         <div className="flex flex-col items-center text-center mb-8">
           <div className="flex items-center gap-3 mb-3">
-            <div className="flex w-10 h-10 border rounded-xl items-center justify-center border-slate-700/50 bg-[#020617]/80 shadow-lg shadow-blue-900/10">
+            <div className="flex w-10 h-10 border rounded-xl items-center justify-center border-[#c8def8]/80 bg-white/80 shadow-lg shadow-blue-900/10">
               <Wind className="w-5 h-5 text-blue-400" />
             </div>
-            <span className="text-2xl font-bold tracking-tight text-white">WindTree WMS</span>
+            <span className="text-2xl font-bold tracking-tight text-slate-900">WindTree WMS</span>
           </div>
-          <p className="text-sm text-slate-400">기상 측정 데이터 통합 관리 플랫폼</p>
+          <p className="text-sm text-slate-500">기상 측정 데이터 통합 관리 플랫폼</p>
         </div>
 
         {/* 카드 */}
         <div
-          className={`w-full rounded-2xl border border-slate-800/60 bg-[#0b111d]/80 backdrop-blur-xl p-8 shadow-2xl shadow-black/40 relative overflow-hidden ${shake ? "animate-shake" : ""}`}
+          className={`w-full rounded-2xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-8 shadow-2xl shadow-black/40 relative overflow-hidden ${shake ? "animate-shake" : ""}`}
         >
           <div className="bg-noise" />
           <form onSubmit={handleLogin} className="relative space-y-5">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
                 이메일
               </label>
               <input
@@ -71,12 +71,12 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="admin@windtreeeng.com"
-                className="w-full rounded-xl border border-slate-700/80 bg-[#020617]/50 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-blue-500 focus:bg-[#020617] focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all"
+                className="w-full rounded-xl border border-[#c8def8] bg-white/70 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 focus:border-blue-500 focus:bg-white/70 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
                 비밀번호
               </label>
               <div className="relative">
@@ -86,12 +86,12 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="••••••••"
-                  className="w-full rounded-xl border border-slate-700/80 bg-[#020617]/50 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-blue-500 focus:bg-[#020617] focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all pr-10"
+                  className="w-full rounded-xl border border-[#c8def8] bg-white/70 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 focus:border-blue-500 focus:bg-white/70 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 transition-colors p-1"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -121,7 +121,7 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-slate-600 mt-6">
+        <p className="text-center text-xs text-slate-500 mt-6">
           © 2026 WindTree Co., Ltd. All rights reserved.
         </p>
       </div>

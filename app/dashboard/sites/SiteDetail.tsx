@@ -375,18 +375,18 @@ export default function SiteDetail({ site }: { site: Site }) {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <div className="flex items-center gap-2 mb-1"><MapPin className="w-4 h-4 text-blue-400" /><h1 className="text-2xl font-bold text-white">{site.name}</h1></div>
-          <p className="text-sm text-slate-400">{site.site_number} · {site.location_name ?? "위치 미입력"}</p>
+          <div className="flex items-center gap-2 mb-1"><MapPin className="w-4 h-4 text-blue-400" /><h1 className="text-2xl font-bold text-slate-900">{site.name}</h1></div>
+          <p className="text-sm text-slate-500">{site.site_number} · {site.location_name ?? "위치 미입력"}</p>
         </div>
-        <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full ${site.is_active ? "bg-green-400/10 text-green-400" : "bg-slate-700 text-slate-400"}`}>
+        <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full ${site.is_active ? "bg-green-400/10 text-green-400" : "bg-slate-700 text-slate-500"}`}>
           <Activity className="w-3 h-3" />{site.is_active ? "활성" : "비활성"}
         </span>
       </div>
 
-      <div className="flex gap-1 bg-[#020617] rounded-xl p-1 w-fit border border-slate-800/60 overflow-x-auto">
+      <div className="flex gap-1 bg-white/70 rounded-xl p-1 w-fit border border-[#d6e8ff] overflow-x-auto">
         {(["overview", "daily", "monthly"] as Tab[]).map((key) => (
           <button key={key} onClick={() => setTab(key)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${tab === key ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"}`}>
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${tab === key ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-700"}`}>
             {key === "overview" ? "Overview" : key === "daily" ? "일별 데이터" : "월별 통계"}
           </button>
         ))}
@@ -395,31 +395,31 @@ export default function SiteDetail({ site }: { site: Site }) {
       {tab === "overview" && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5 space-y-4">
-              <h3 className="text-sm font-semibold text-white flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-400" />사이트 정보</h3>
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-4">
+              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-400" />사이트 정보</h3>
               <div className="space-y-3 text-sm">
                 {[["사이트 번호", site.site_number], ["위치명", site.location_name ?? "-"], ["위도", site.latitude != null ? `${toFixedOrDash(site.latitude, 6)}° N` : "-"], ["경도", site.longitude != null ? `${toFixedOrDash(site.longitude, 6)}° E` : "-"], ["고도", site.elevation != null ? `${toFixedOrDash(site.elevation, 1)} m` : "-"], ["iPack", site.ipack_email ?? "-"]].map(([l, v]) => (
                   <div key={l} className="flex justify-between gap-4"><span className="text-slate-500">{l}</span><span className="text-slate-200 font-mono text-xs text-right">{v}</span></div>
                 ))}
               </div>
             </div>
-            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5 space-y-4">
-              <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400" />센서 구성</h3>
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-4">
+              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400" />센서 구성</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {Object.entries(CHANNEL_LABELS).map(([ch, label]) => (
-                  <div key={ch} className="flex items-center gap-2 text-xs"><span className="text-blue-400 font-mono w-8">{ch}</span><span className="text-slate-400">{label}</span></div>
+                  <div key={ch} className="flex items-center gap-2 text-xs"><span className="text-blue-400 font-mono w-8">{ch}</span><span className="text-slate-500">{label}</span></div>
                 ))}
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5 space-y-3">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />계측기 위치 지도</h3>
+          <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-3">
+            <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />계측기 위치 지도</h3>
             {!mapEmbedUrl ? (
               <div className="text-sm text-slate-500">위도/경도 정보가 없어 지도를 표시할 수 없습니다</div>
             ) : (
               <>
-                <div className="w-full h-[280px] rounded-xl overflow-hidden border border-slate-800/60">
+                <div className="w-full h-[280px] rounded-xl overflow-hidden border border-[#d6e8ff]">
                   <iframe title="site-map" src={mapEmbedUrl} className="w-full h-full" loading="lazy" />
                 </div>
                 <a
@@ -434,8 +434,8 @@ export default function SiteDetail({ site }: { site: Site }) {
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
-            <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />엑셀 기준 월간 풍속 비교 미리보기</h3>
+          <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
+            <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />엑셀 기준 월간 풍속 비교 미리보기</h3>
             {overviewChartData.length === 0 ? (
               <div className="text-sm text-slate-500 py-10 text-center">월간 데이터가 없습니다</div>
             ) : (
@@ -460,7 +460,7 @@ export default function SiteDetail({ site }: { site: Site }) {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
             <div className="flex items-center gap-3">
-              <label className="text-sm text-slate-400">날짜</label>
+              <label className="text-sm text-slate-500">날짜</label>
               <div className="flex items-center gap-2">
                 <input
                   ref={dateInputRef}
@@ -469,12 +469,12 @@ export default function SiteDetail({ site }: { site: Site }) {
                   onChange={(e) => setSelectedDate(e.target.value)}
                   onKeyDown={(e) => e.preventDefault()}
                   onFocus={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
-                  className="rounded-xl border border-slate-700/80 bg-[#020617] px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
+                  className="rounded-xl border border-[#c8def8] bg-white/70 px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => dateInputRef.current?.showPicker?.()}
-                  className="rounded-lg border border-slate-700/80 bg-[#020617] p-2 text-slate-300 hover:text-white"
+                  className="rounded-lg border border-[#c8def8] bg-white/70 p-2 text-slate-700 hover:text-slate-900"
                   title="날짜 선택"
                 >
                   <CalendarDays className="w-4 h-4" />
@@ -484,10 +484,10 @@ export default function SiteDetail({ site }: { site: Site }) {
           </div>
 
           {loading ? <div className="text-center py-12 text-slate-500 text-sm">로딩 중...</div>
-          : dailyExcelData.length === 0 ? <div className="text-center py-12 text-slate-500 text-sm rounded-xl border border-slate-800/60 bg-[#0b111d]">해당 날짜의 데이터가 없습니다</div>
+          : dailyExcelData.length === 0 ? <div className="text-center py-12 text-slate-500 text-sm rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl">해당 날짜의 데이터가 없습니다</div>
           : <>
-            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
-              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400" />Wind Speed</h3>
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
+              <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400" />Wind Speed</h3>
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={dailyExcelData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -500,8 +500,8 @@ export default function SiteDetail({ site }: { site: Site }) {
               </ResponsiveContainer>
             </div>
 
-            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
-              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />Wind Direction</h3>
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
+              <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />Wind Direction</h3>
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={dailyExcelData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -514,8 +514,8 @@ export default function SiteDetail({ site }: { site: Site }) {
               </ResponsiveContainer>
             </div>
 
-            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
-              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-blue-400" />Atmospheric / Humidity / Temp</h3>
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
+              <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-blue-400" />Atmospheric / Humidity / Temp</h3>
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={dailyExcelData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -528,28 +528,28 @@ export default function SiteDetail({ site }: { site: Site }) {
               </ResponsiveContainer>
             </div>
 
-            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] overflow-hidden">
-              <div className="p-4 border-b border-slate-800/60 flex items-center gap-2 text-white text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />10 Minutes Average Data (엑셀형 가로)</div>
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
+              <div className="p-4 border-b border-[#d6e8ff] flex items-center gap-2 text-slate-900 text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />10 Minutes Average Data (엑셀형 가로)</div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[2400px]">
                   <thead>
-                    <tr className="border-b border-slate-800/40">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Description</th>
-                      <th className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Height</th>
-                      {dailyExcelTable.timeLabels.map((t, i) => <th key={`${t}-${i}`} className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t}</th>)}
-                      {['AVE', 'MAX', 'MIN', 'STD'].map((h) => <th key={h} className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>)}
+                    <tr className="border-b border-[#d6e8ff]/70">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
+                      <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Height</th>
+                      {dailyExcelTable.timeLabels.map((t, i) => <th key={`${t}-${i}`} className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{t}</th>)}
+                      {['AVE', 'MAX', 'MIN', 'STD'].map((h) => <th key={h} className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>)}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/40">
+                  <tbody className="divide-y divide-[#d6e8ff]/70">
                     {dailyExcelTable.rows.map((row) => (
                       <tr key={row.ch} className="hover:bg-slate-800/20 transition-colors">
                         <td className="px-4 py-2.5 text-xs text-slate-200 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch]}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-300 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.height ?? "-"}</td>
-                        {row.values.map((v, i) => <td key={`${row.ch}-${i}`} className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(v, 2)}</td>)}
-                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.ave, 2)}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.max, 2)}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.min, 2)}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.std, 2)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-700 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.height ?? "-"}</td>
+                        {row.values.map((v, i) => <td key={`${row.ch}-${i}`} className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(v, 2)}</td>)}
+                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.ave, 2)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.max, 2)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.min, 2)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.std, 2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -564,7 +564,7 @@ export default function SiteDetail({ site }: { site: Site }) {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <label className="text-sm text-slate-400">월</label>
+              <label className="text-sm text-slate-500">월</label>
               <div className="flex items-center gap-2">
                 <input
                   ref={monthInputRef}
@@ -573,12 +573,12 @@ export default function SiteDetail({ site }: { site: Site }) {
                   onChange={(e) => setSelectedMonth(e.target.value)}
                   onKeyDown={(e) => e.preventDefault()}
                   onFocus={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
-                  className="rounded-xl border border-slate-700/80 bg-[#020617] px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
+                  className="rounded-xl border border-[#c8def8] bg-white/70 px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => monthInputRef.current?.showPicker?.()}
-                  className="rounded-lg border border-slate-700/80 bg-[#020617] p-2 text-slate-300 hover:text-white"
+                  className="rounded-lg border border-[#c8def8] bg-white/70 p-2 text-slate-700 hover:text-slate-900"
                   title="월 선택"
                 >
                   <CalendarDays className="w-4 h-4" />
@@ -595,10 +595,10 @@ export default function SiteDetail({ site }: { site: Site }) {
           </div>
 
           {loading ? <div className="text-center py-12 text-slate-500 text-sm">로딩 중...</div>
-          : Object.keys(excelMonthlyChartData).length === 0 ? <div className="text-center py-12 text-slate-500 text-sm rounded-xl border border-slate-800/60 bg-[#0b111d]">해당 월의 데이터가 없습니다</div>
+          : Object.keys(excelMonthlyChartData).length === 0 ? <div className="text-center py-12 text-slate-500 text-sm rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl">해당 월의 데이터가 없습니다</div>
           : <>
-            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
-              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />엑셀형 월간 채널 비교 그래프 (평균값)</h3>
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
+              <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />엑셀형 월간 채널 비교 그래프 (평균값)</h3>
               <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={excelMonthlyChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -615,34 +615,34 @@ export default function SiteDetail({ site }: { site: Site }) {
               </ResponsiveContainer>
             </div>
 
-            <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] overflow-hidden">
-              <div className="p-4 border-b border-slate-800/60 flex items-center gap-2 text-white text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />월별 통계 수치 (엑셀형 가로 테이블)</div>
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
+              <div className="p-4 border-b border-[#d6e8ff] flex items-center gap-2 text-slate-900 text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />월별 통계 수치 (엑셀형 가로 테이블)</div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[2200px]">
                   <thead>
-                    <tr className="border-b border-slate-800/40">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Description</th>
-                      <th className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Height</th>
+                    <tr className="border-b border-[#d6e8ff]/70">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
+                      <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Height</th>
                       {excelMonthlyTable.dayLabels.map((d) => (
-                        <th key={d} className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{d}</th>
+                        <th key={d} className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{d}</th>
                       ))}
                       {['AVE', 'MAX', 'MIN', 'STD'].map((h) => (
-                        <th key={h} className="text-left px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
+                        <th key={h} className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/40">
+                  <tbody className="divide-y divide-[#d6e8ff]/70">
                     {excelMonthlyTable.rows.map((row) => (
                       <tr key={row.ch} className="hover:bg-slate-800/20 transition-colors">
                         <td className="px-4 py-2.5 text-xs text-slate-200 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch]}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-300 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.height ?? "-"}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-700 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.height ?? "-"}</td>
                         {row.dayValues.map((v, i) => (
-                          <td key={`${row.ch}-${i}`} className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(v, 2)}</td>
+                          <td key={`${row.ch}-${i}`} className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(v, 2)}</td>
                         ))}
-                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.ave, 2)}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.max, 2)}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.min, 2)}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-300">{toFixedOrDash(row.std, 2)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.ave, 2)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.max, 2)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.min, 2)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.std, 2)}</td>
                       </tr>
                     ))}
                   </tbody>

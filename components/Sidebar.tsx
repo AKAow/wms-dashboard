@@ -26,13 +26,13 @@ function NavContent({
   return (
     <>
       {/* 로고 */}
-      <div className="p-5 border-b border-slate-800/60">
+      <div className="p-5 border-b border-[#d6e8ff]">
         <div className="flex items-center gap-2.5">
-          <div className="flex w-8 h-8 border rounded-lg items-center justify-center border-slate-700/50 bg-slate-900/80">
+          <div className="flex w-8 h-8 border rounded-lg items-center justify-center border-[#c8def8]/80 bg-slate-900/80">
             <Wind className="w-4 h-4 text-blue-400" />
           </div>
           <div>
-            <p className="text-sm font-bold text-white">WindTree</p>
+            <p className="text-sm font-bold text-slate-900">WindTree</p>
             <p className="text-[10px] text-blue-400 font-semibold tracking-widest">WMS</p>
           </div>
         </div>
@@ -48,7 +48,7 @@ function NavContent({
             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
               isActive(href)
                 ? "bg-blue-600/20 text-blue-400 font-medium"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+                : "text-slate-600 hover:text-slate-900 hover:bg-blue-50"
             }`}
           >
             <Icon className="w-4 h-4 flex-shrink-0" />
@@ -58,10 +58,10 @@ function NavContent({
       </nav>
 
       {/* 로그아웃 */}
-      <div className="p-3 border-t border-slate-800/60">
+      <div className="p-3 border-t border-[#d6e8ff]">
         <button
           onClick={onLogout}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:text-red-400 hover:bg-red-400/10 transition-all"
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-slate-500 hover:text-red-400 hover:bg-red-400/10 transition-all"
         >
           <LogOut className="w-4 h-4" />
           로그아웃
@@ -91,7 +91,7 @@ export default function Sidebar() {
       {/* 모바일 햄버거 버튼 */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed top-4 left-4 z-50 p-2 rounded-lg bg-[#020617] border border-slate-800 text-slate-400 hover:text-white md:hidden"
+        className="fixed top-4 left-4 z-50 p-2 rounded-lg bg-white/80 backdrop-blur-xl border border-[#d6e8ff] text-slate-600 hover:text-slate-900 md:hidden"
       >
         <Menu className="w-5 h-5" />
       </button>
@@ -106,14 +106,14 @@ export default function Sidebar() {
 
       {/* 모바일 드로어 */}
       <aside
-        className={`fixed left-0 top-0 h-full w-56 bg-[#020617] border-r border-slate-800/60 flex flex-col z-50 transition-transform duration-200
+        className={`fixed left-0 top-0 h-full w-56 bg-white/80 backdrop-blur-xl border-r border-[#d6e8ff] flex flex-col z-50 transition-transform duration-200
           md:translate-x-0
           ${open ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
       >
         {/* 모바일 닫기 버튼 */}
         <button
           onClick={() => setOpen(false)}
-          className="absolute top-4 right-4 p-1 text-slate-500 hover:text-white md:hidden"
+          className="absolute top-4 right-4 p-1 text-slate-500 hover:text-slate-900 md:hidden"
         >
           <X className="w-4 h-4" />
         </button>

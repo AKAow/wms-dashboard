@@ -72,34 +72,34 @@ export default function DataPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-white">데이터 관리</h1>
-        <p className="text-sm text-slate-400 mt-1">데이터 적재 현황 및 자동 동기화 상태</p>
+        <h1 className="text-2xl font-bold text-slate-900">데이터 관리</h1>
+        <p className="text-sm text-slate-500 mt-1">데이터 적재 현황 및 자동 동기화 상태</p>
       </div>
 
-      <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-5">
+      <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
         <div className="flex items-center gap-3 mb-3">
           <div className="p-2 rounded-lg bg-blue-400/10"><RefreshCw className="w-5 h-5 text-blue-400" /></div>
           <div>
-            <h3 className="text-sm font-semibold text-white">사이트별 자동 동기화</h3>
-            <p className="text-xs text-slate-400">각 사이트 설정에 따라 RLD 메일을 자동 감지하여 처리</p>
+            <h3 className="text-sm font-semibold text-slate-900">사이트별 자동 동기화</h3>
+            <p className="text-xs text-slate-500">각 사이트 설정에 따라 RLD 메일을 자동 감지하여 처리</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4 text-sm mt-4">
           {[["동기화 방식", "사이트별 설정"], ["동기화 주기", `주 1회 (${syncDay} 06:00)`], ["마지막 실행", uploads[0] ? new Date(uploads[0].created_at).toLocaleString("ko") : "-"], ["상태", "활성"]].map(([l, v]) => (
             <div key={l}>
               <p className="text-xs text-slate-500 mb-0.5">{l}</p>
-              <p className={`text-sm ${l === "상태" ? "text-green-400 font-medium" : "text-slate-300"}`}>{v}</p>
+              <p className={`text-sm ${l === "상태" ? "text-green-400 font-medium" : "text-slate-700"}`}>{v}</p>
             </div>
           ))}
         </div>
-        <p className="text-xs text-slate-500 mt-4 border-t border-slate-800/60 pt-3">
+        <p className="text-xs text-slate-500 mt-4 border-t border-[#d6e8ff] pt-3">
           💡 RLD 파일로 사이트를 추가하거나 데이터를 업로드하려면 <span className="text-blue-400 font-medium">사이트 관리 &gt; RLD로 추가</span> 를 사용하세요
         </p>
       </div>
 
-      <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] p-4 space-y-3">
+      <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-white">사이트별 데이터 현황</h2>
+          <h2 className="text-sm font-semibold text-slate-900">사이트별 데이터 현황</h2>
           <span className="text-xs text-slate-500">{siteSummary.length}개 사이트</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -107,9 +107,9 @@ export default function DataPage() {
             <p className="text-sm text-slate-500">사이트별 데이터가 없습니다.</p>
           ) : (
             siteSummary.map(([name, s]) => (
-              <div key={name} className="rounded-lg border border-slate-800/60 bg-[#020617]/40 p-3">
-                <p className="text-sm text-white font-medium">{name}</p>
-                <p className="text-xs text-slate-400 mt-1">총 {s.total}건 · 성공 {s.success}건 · 실패 {s.failed}건</p>
+              <div key={name} className="rounded-lg border border-[#d6e8ff] bg-white/65 p-3">
+                <p className="text-sm text-slate-900 font-medium">{name}</p>
+                <p className="text-xs text-slate-500 mt-1">총 {s.total}건 · 성공 {s.success}건 · 실패 {s.failed}건</p>
                 <p className="text-xs text-slate-500 mt-1">최근 반영: {s.latest ? new Date(s.latest).toLocaleString("ko") : "-"}</p>
               </div>
             ))
@@ -117,15 +117,15 @@ export default function DataPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-800/60 bg-[#0b111d] overflow-hidden">
-        <div className="p-4 border-b border-slate-800/60 flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="text-sm font-semibold text-white">업로드 이력</h2>
+      <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
+        <div className="p-4 border-b border-[#d6e8ff] flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="text-sm font-semibold text-slate-900">업로드 이력</h2>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">사이트</span>
+            <span className="text-xs text-slate-500">사이트</span>
             <select
               value={selectedSite}
               onChange={(e) => setSelectedSite(e.target.value)}
-              className="rounded-lg border border-slate-700 bg-[#020617] px-3 py-1.5 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
+              className="rounded-lg border border-[#c8def8] bg-white/70 px-3 py-1.5 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
             >
               <option value="all">전체</option>
               {siteOptions.map((site) => (
@@ -138,23 +138,23 @@ export default function DataPage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px]">
             <thead>
-              <tr className="border-b border-slate-800/40">
+              <tr className="border-b border-[#d6e8ff]/70">
                 {["상태", "파일명", "사이트", "날짜", "건수", "일시"].map((h, i) => (
-                  <th key={i} className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
+                  <th key={i} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/40">
+            <tbody className="divide-y divide-[#d6e8ff]/70">
               {filteredUploads.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">업로드 이력이 없습니다</td></tr>
               ) : (
                 filteredUploads.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-800/20 transition-colors">
                     <td className="px-4 py-3">{statusIcon(u.status)}</td>
-                    <td className="px-4 py-3 text-xs font-mono text-slate-300 max-w-[160px] truncate">{u.file_name ?? "-"}</td>
-                    <td className="px-4 py-3 text-sm text-slate-400">{u.sites?.name ?? "-"}</td>
-                    <td className="px-4 py-3 text-xs text-slate-400">{u.date_range_start ?? "-"}</td>
-                    <td className="px-4 py-3 text-sm text-slate-300">{u.records_inserted?.toLocaleString() ?? "-"}</td>
+                    <td className="px-4 py-3 text-xs font-mono text-slate-700 max-w-[160px] truncate">{u.file_name ?? "-"}</td>
+                    <td className="px-4 py-3 text-sm text-slate-500">{u.sites?.name ?? "-"}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{u.date_range_start ?? "-"}</td>
+                    <td className="px-4 py-3 text-sm text-slate-700">{u.records_inserted?.toLocaleString() ?? "-"}</td>
                     <td className="px-4 py-3 text-xs text-slate-500">{new Date(u.created_at).toLocaleString("ko")}</td>
                   </tr>
                 ))
