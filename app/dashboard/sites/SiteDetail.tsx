@@ -8,7 +8,7 @@ import * as XLSX from "xlsx";
 import type { Site, DailyStat, Measurement } from "@/lib/types";
 import { CHANNEL_LABELS } from "@/lib/types";
 
-type Tab = "overview" | "daily" | "monthly";
+type Tab = "overview" | "daily" | "monthly" | "simulation";
 
 const EXCEL_DISPLAY_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"] as const;
 const EXCEL_WIND_SPEED_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"] as const;
@@ -296,30 +296,7 @@ export default function SiteDetail({ site }: { site: Site }) {
 
   const overviewChartSeries = useMemo(() => {
     if (outputPeriod === "1W") return overviewChartData.slice(-7);
-    if (outputPeriod === "1M") {
-      const weekMap = new Map<string, { date: string; ch1: number; ch2: number; ch3: number; ch4: number; ch5: number; count: number }>();
-      for (const row of overviewChartData) {
-        const dd = Number(row.date.split("-")[1] ?? "1");
-        const w = Math.ceil(dd / 7);
-        const key = `${selectedMonth.split("-")[1]}월 ${w}주`;
-        const prev = weekMap.get(key) ?? { date: key, ch1: 0, ch2: 0, ch3: 0, ch4: 0, ch5: 0, count: 0 };
-        prev.ch1 += row.ch1;
-        prev.ch2 += row.ch2;
-        prev.ch3 += row.ch3;
-        prev.ch4 += row.ch4;
-        prev.ch5 += row.ch5;
-        prev.count += 1;
-        weekMap.set(key, prev);
-      }
-      return Array.from(weekMap.values()).map((r) => ({
-        date: r.date,
-        ch1: r.count ? r.ch1 / r.count : 0,
-        ch2: r.count ? r.ch2 / r.count : 0,
-        ch3: r.count ? r.ch3 / r.count : 0,
-        ch4: r.count ? r.ch4 / r.count : 0,
-        ch5: r.count ? r.ch5 / r.count : 0,
-      }));
-    }
+    if (outputPeriod === "1M") return overviewChartData;
 
     const monthMap = new Map<string, { date: string; ch1: number; ch2: number; ch3: number; ch4: number; ch5: number; count: number }>();
     for (const row of dailyStats.filter((r) => ["ch1", "ch2", "ch3", "ch4", "ch5"].includes(r.channel) && typeof r.avg_value === "number")) {
@@ -342,7 +319,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       ch4: r.count ? r.ch4 / r.count : 0,
       ch5: r.count ? r.ch5 / r.count : 0,
     }));
-  }, [outputPeriod, overviewChartData, selectedMonth, dailyStats]);
+  }, [outputPeriod, overviewChartData, dailyStats]);
 
   const excelMonthlyChartData = useMemo(() => {
     const rows = selectedMonthStats
@@ -523,28 +500,7 @@ export default function SiteDetail({ site }: { site: Site }) {
     }
 
     if (overviewPeriod === "1M") {
-      const weekMap = new Map<string, { date: string; windSum: number; p50Sum: number; p75Sum: number; p90Sum: number; count: number; qualityScore: number }>();
-      for (const row of estimateDailyRows) {
-        const [mm, dd] = row.date.split("-").map(Number);
-        const w = Math.ceil(dd / 7);
-        const key = `${mm}월 ${w}주`;
-        const prev = weekMap.get(key) ?? { date: key, windSum: 0, p50Sum: 0, p75Sum: 0, p90Sum: 0, count: 0, qualityScore: 0 };
-        prev.windSum += row.wind;
-        prev.p50Sum += row.p50;
-        prev.p75Sum += row.p75;
-        prev.p90Sum += row.p90;
-        prev.count += 1;
-        prev.qualityScore += row.quality === "정상" ? 2 : row.quality === "주의" ? 1 : 0;
-        weekMap.set(key, prev);
-      }
-      return Array.from(weekMap.values()).map((r) => ({
-        date: r.date,
-        wind: r.count ? r.windSum / r.count : 0,
-        p50: r.p50Sum,
-        p75: r.p75Sum,
-        p90: r.p90Sum,
-        quality: r.qualityScore >= r.count * 1.5 ? "정상" : r.qualityScore >= r.count ? "주의" : "낮음",
-      }));
+      return estimateDailyRows;
     }
 
     const monthMap = new Map<string, { date: string; windSum: number; p50Sum: number; p75Sum: number; p90Sum: number; count: number; qualityScore: number }>();
@@ -599,10 +555,10 @@ export default function SiteDetail({ site }: { site: Site }) {
       </div>
 
       <div className="flex gap-1 bg-white/70 rounded-xl p-1 w-fit border border-[#d6e8ff] overflow-x-auto shadow-[0_6px_16px_rgba(10,37,64,0.06)]">
-        {(["overview", "daily", "monthly"] as Tab[]).map((key) => (
+        {(["overview", "daily", "monthly", "simulation"] as Tab[]).map((key) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${tab === key ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-700"}`}>
-            {key === "overview" ? "Overview" : key === "daily" ? "일별 데이터" : "월별 통계"}
+            {key === "overview" ? "Overview" : key === "daily" ? "일별 데이터" : key === "monthly" ? "월별 통계" : "사업성 시뮬레이션"}
           </button>
         ))}
       </div>
@@ -978,6 +934,19 @@ export default function SiteDetail({ site }: { site: Site }) {
               </div>
             </div>
           </>}
+        </div>
+      )}
+
+      {tab === "simulation" && (
+        <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-4">
+          <h3 className="text-sm font-semibold text-slate-900">사업성 시뮬레이션</h3>
+          <p className="text-xs text-slate-600">터빈 연식 기반 손실률 기본값을 적용한 제한형 시나리오입니다.</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">보수 시나리오</div><div className="text-slate-900 font-semibold mt-1">손실률 22%</div></div>
+            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">기준 시나리오</div><div className="text-slate-900 font-semibold mt-1">손실률 17%</div></div>
+            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">공격 시나리오</div><div className="text-slate-900 font-semibold mt-1">손실률 12%</div></div>
+          </div>
+          <p className="text-[11px] text-amber-700">※ 시뮬레이션 값은 사업성 검토 참고용이며 발전량 보증값이 아닙니다.</p>
         </div>
       )}
     </div>
