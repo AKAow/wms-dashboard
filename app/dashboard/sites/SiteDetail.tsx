@@ -399,17 +399,25 @@ export default function SiteDetail({ site }: { site: Site }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-1"><MapPin className="w-4 h-4 text-blue-400" /><h1 className="text-2xl font-bold text-slate-900">{site.name}</h1></div>
-          <p className="text-sm text-slate-500">{site.site_number} · {site.location_name ?? "위치 미입력"}</p>
-        </div>
-        <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full ${site.is_active ? "bg-green-400/10 text-green-500" : "bg-slate-200 text-slate-600"}`}>
-          <Activity className="w-3 h-3" />{site.is_active ? "활성" : "비활성"}
-        </span>
+      <div className="flex items-center gap-3">
+        <div className="text-sm text-slate-500">Site Dashboard · Customer View</div>
       </div>
 
-      <div className="flex gap-1 bg-white/70 rounded-xl p-1 w-fit border border-[#d6e8ff] overflow-x-auto">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-1"><MapPin className="w-4 h-4 text-blue-400" /><h1 className="text-3xl font-bold tracking-tight text-slate-900">{site.name}</h1></div>
+          <p className="text-sm text-slate-500">{site.site_number} · {site.location_name ?? "위치 미입력"} · 최근 동기화 {latestDataDate}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setTab("monthly")} className="rounded-xl border border-[#c8def8] bg-white/80 px-4 py-2 text-sm text-slate-700 hover:bg-blue-50">월간 통계</button>
+          <button onClick={downloadMonthlyExcel} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500">엑셀 다운로드</button>
+          <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full ${site.is_active ? "bg-green-400/10 text-green-500" : "bg-slate-200 text-slate-600"}`}>
+            <Activity className="w-3 h-3" />{site.is_active ? "활성" : "비활성"}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex gap-1 bg-white/70 rounded-xl p-1 w-fit border border-[#d6e8ff] overflow-x-auto shadow-[0_6px_16px_rgba(10,37,64,0.06)]">
         {(["overview", "daily", "monthly"] as Tab[]).map((key) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${tab === key ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-700"}`}>
@@ -439,7 +447,27 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr] gap-4">
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
+              <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />엑셀 기준 월간 풍속 비교</h3>
+              {overviewChartData.length === 0 ? (
+                <div className="text-sm text-slate-500 py-10 text-center">월간 데이터가 없습니다</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={overviewChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
+                    <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
+                    <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
+                    <Legend wrapperStyle={{ fontSize: "12px" }} />
+                    <Line type="monotone" dataKey="ch1" name="100m 풍속" stroke={CHART_COLORS.ch1} dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="ch2" name="96m 풍속" stroke={CHART_COLORS.ch2} dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="ch3" name="80m 풍속" stroke={CHART_COLORS.ch3} dot={false} strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-400" />사이트 정보</h3>
               <div className="space-y-3 text-sm">
@@ -448,11 +476,35 @@ export default function SiteDetail({ site }: { site: Site }) {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_1fr] gap-4">
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />계측기 위치 지도</h3>
+              {!mapEmbedUrl ? (
+                <div className="text-sm text-slate-500">위도/경도 정보가 없어 지도를 표시할 수 없습니다</div>
+              ) : (
+                <>
+                  <div className="w-full h-[280px] rounded-xl overflow-hidden border border-[#d6e8ff]">
+                    <iframe title="site-map" src={mapEmbedUrl} className="w-full h-full" loading="lazy" />
+                  </div>
+                  <a
+                    href={`https://www.openstreetmap.org/?mlat=${site.latitude}&mlon=${site.longitude}#map=12/${site.latitude}/${site.longitude}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-blue-500 hover:text-blue-600"
+                  >
+                    OpenStreetMap에서 크게 보기
+                  </a>
+                </>
+              )}
+            </div>
+
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400" />센서 구성</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {Object.entries(CHANNEL_LABELS).map(([ch, label]) => (
-                  <div key={ch} className="flex items-center gap-2 text-xs"><span className="text-blue-400 font-mono w-8">{ch}</span><span className="text-slate-500">{label}</span></div>
+                  <div key={ch} className="flex items-center gap-2 text-xs"><span className="text-blue-500 font-mono w-8">{ch}</span><span className="text-slate-600">{label}</span></div>
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-2 pt-1">
@@ -460,47 +512,6 @@ export default function SiteDetail({ site }: { site: Site }) {
                 <button onClick={() => setTab("monthly")} className="rounded-lg bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-500">월간 통계 보기</button>
               </div>
             </div>
-          </div>
-
-          <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />계측기 위치 지도</h3>
-            {!mapEmbedUrl ? (
-              <div className="text-sm text-slate-500">위도/경도 정보가 없어 지도를 표시할 수 없습니다</div>
-            ) : (
-              <>
-                <div className="w-full h-[280px] rounded-xl overflow-hidden border border-[#d6e8ff]">
-                  <iframe title="site-map" src={mapEmbedUrl} className="w-full h-full" loading="lazy" />
-                </div>
-                <a
-                  href={`https://www.openstreetmap.org/?mlat=${site.latitude}&mlon=${site.longitude}#map=12/${site.latitude}/${site.longitude}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-blue-400 hover:text-blue-300"
-                >
-                  OpenStreetMap에서 크게 보기
-                </a>
-              </>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
-            <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />엑셀 기준 월간 풍속 비교 미리보기</h3>
-            {overviewChartData.length === 0 ? (
-              <div className="text-sm text-slate-500 py-10 text-center">월간 데이터가 없습니다</div>
-            ) : (
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={overviewChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
-                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
-                  <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
-                  <Legend wrapperStyle={{ fontSize: "12px" }} />
-                  <Line type="monotone" dataKey="ch1" name="100m 풍속" stroke={CHART_COLORS.ch1} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch2" name="96m 풍속" stroke={CHART_COLORS.ch2} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch3" name="80m 풍속" stroke={CHART_COLORS.ch3} dot={false} strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
           </div>
         </div>
       )}
