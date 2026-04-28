@@ -389,15 +389,6 @@ export default function SiteDetail({ site }: { site: Site }) {
     XLSX.writeFile(wb, `${site.site_number}_${selectedMonth}_Monthly_Report.xlsx`);
   }, [excelMonthlyTable, selectedMonth, site.site_number]);
 
-  const mapEmbedUrl = useMemo(() => {
-    if (site.latitude == null || site.longitude == null) return null;
-    const lat = site.latitude;
-    const lon = site.longitude;
-    const delta = 0.01;
-    const bbox = `${lon - delta},${lat - delta},${lon + delta},${lat + delta}`;
-    return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${lat}%2C${lon}`;
-  }, [site.latitude, site.longitude]);
-
   const monthRows = useMemo(
     () => dailyStats.filter((row) => row.date.startsWith(selectedMonth)),
     [dailyStats, selectedMonth],
@@ -452,6 +443,36 @@ export default function SiteDetail({ site }: { site: Site }) {
       return { ...row, state };
     });
   }, [sensorWindRows]);
+
+  const estimateDailyRows = useMemo(() => {
+    const byDate = monthRows
+      .filter((r) => r.channel === "ch1" && typeof r.avg_value === "number")
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const ratedPowerMw = 4.2;
+    const losses = 0.17;
+    return byDate.map((r) => {
+      const v = r.avg_value as number;
+      const grossCf = Math.min(Math.max((v - 3) / 9, 0), 1) ** 3;
+      const netCf = Math.min(grossCf * 0.9, 0.62);
+      const p50 = ratedPowerMw * 24 * netCf * (1 - losses);
+      const p75 = p50 * 0.92;
+      const p90 = p50 * 0.84;
+      const quality = r.data_count >= 100 ? "정상" : r.data_count >= 50 ? "주의" : "낮음";
+      return {
+        date: r.date.slice(5),
+        wind: v,
+        p50,
+        p75,
+        p90,
+        quality,
+      };
+    });
+  }, [monthRows]);
+
+  const estimateRowsForPeriod = useMemo(() => {
+    return estimateDailyRows.slice(-overviewPeriod);
+  }, [estimateDailyRows, overviewPeriod]);
 
   const estimateModel = useMemo(() => {
     const [y, m] = selectedMonth.split("-").map(Number);
@@ -608,25 +629,63 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="panel">
               <div className="panel-head">
                 <div>
-                  <div className="p-title">Site map</div>
-                  <div className="p-sub">Measurement mast location</div>
+                  <div className="p-title">Energy estimate</div>
+                  <div className="p-sub">Daily expected energy with confidence bands</div>
+                </div>
+                <div className="seg">
+                  {[7, 14, 30].map((p) => (
+                    <span key={p} className={overviewPeriod === p ? "on" : ""} onClick={() => setOverviewPeriod(p as 7 | 14 | 30)}>{p}D</span>
+                  ))}
                 </div>
               </div>
-              {!mapEmbedUrl ? (
-                <div className="text-sm text-slate-500">위도/경도 정보가 없어 지도를 표시할 수 없습니다</div>
+
+              {estimateRowsForPeriod.length === 0 ? (
+                <div className="text-sm text-slate-500 py-10 text-center">추정 가능한 데이터가 없습니다</div>
               ) : (
                 <>
-                  <div className="w-full h-[280px] rounded-xl overflow-hidden border border-[#d6e8ff]">
-                    <iframe title="site-map" src={mapEmbedUrl} className="w-full h-full" loading="lazy" />
+                  <ResponsiveContainer width="100%" height={260}>
+                    <LineChart data={estimateRowsForPeriod}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" MWh" />
+                      <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
+                      <Legend wrapperStyle={{ fontSize: "12px" }} />
+                      <Line type="monotone" dataKey="p50" name="P50" stroke="#2f80ed" dot={false} strokeWidth={2.2} />
+                      <Line type="monotone" dataKey="p75" name="P75" stroke="#10b981" dot={false} strokeWidth={1.8} />
+                      <Line type="monotone" dataKey="p90" name="P90" stroke="#f59e0b" dot={false} strokeWidth={1.8} />
+                    </LineChart>
+                  </ResponsiveContainer>
+
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full min-w-[680px] text-xs">
+                      <thead>
+                        <tr className="border-b border-[#d6e8ff] text-slate-500">
+                          <th className="text-left px-2 py-2">날짜</th>
+                          <th className="text-right px-2 py-2">평균풍속</th>
+                          <th className="text-right px-2 py-2">P50</th>
+                          <th className="text-right px-2 py-2">P75</th>
+                          <th className="text-right px-2 py-2">P90</th>
+                          <th className="text-right px-2 py-2">품질</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {estimateRowsForPeriod.map((r) => (
+                          <tr key={r.date} className="border-b border-[#e6f0ff] text-slate-700">
+                            <td className="px-2 py-2">{r.date}</td>
+                            <td className="px-2 py-2 text-right">{toFixedOrDash(r.wind, 2)} m/s</td>
+                            <td className="px-2 py-2 text-right">{toFixedOrDash(r.p50, 1)}</td>
+                            <td className="px-2 py-2 text-right">{toFixedOrDash(r.p75, 1)}</td>
+                            <td className="px-2 py-2 text-right">{toFixedOrDash(r.p90, 1)}</td>
+                            <td className="px-2 py-2 text-right">{r.quality}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <a
-                    href={`https://www.openstreetmap.org/?mlat=${site.latitude}&mlon=${site.longitude}#map=12/${site.latitude}/${site.longitude}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-blue-500 hover:text-blue-600"
-                  >
-                    OpenStreetMap에서 크게 보기
-                  </a>
+
+                  <div className="mt-3 rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-[11px] text-slate-600">
+                    기준: 풍속 기반 파워커브 근사 · 정격 4.2MW · 손실 17% · 결과는 사업성 검토용 추정치(보증 아님)
+                  </div>
                 </>
               )}
             </div>
