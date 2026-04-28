@@ -1086,9 +1086,14 @@ export default function SiteDetail({ site }: { site: Site }) {
           <h3 className="text-sm font-semibold text-slate-900">사업성 시뮬레이션</h3>
           <p className="text-xs text-slate-600">연식 기반 손실률과 적용 구간을 선택해 P50/P75/P90 추정치를 계산합니다.</p>
 
-          <div className={`rounded-lg border px-3 py-2 text-sm inline-flex items-center gap-2 ${simulationAssessment.tone}`}>
-            <b>사업성 평가: {simulationAssessment.grade}</b>
-            <span className="text-xs">({simulationAssessment.reason})</span>
+          <div className="flex flex-col md:flex-row gap-2 md:items-center">
+            <div className={`rounded-lg border px-3 py-2 text-sm inline-flex items-center gap-2 ${simulationAssessment.tone}`}>
+              <b>사업성 평가: {simulationAssessment.grade}</b>
+              <span className="text-xs">({simulationAssessment.reason})</span>
+            </div>
+            <div className="rounded-lg border border-[#d6e8ff] bg-white/70 px-3 py-2 text-xs text-slate-700">
+              <b>AI 조언</b>: {simulationAdvice}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-sm">
@@ -1171,7 +1176,6 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div><b>P50</b>: 기준 시나리오에서 초과 달성 확률이 약 50%인 중간값 추정치</div>
             <div><b>P75</b>: 보수적 관점의 추정치(초과 달성 확률 약 75%)</div>
             <div><b>P90</b>: 매우 보수적 추정치(초과 달성 확률 약 90%)</div>
-            <div className="pt-1"><b>AI 조언</b>: {simulationAdvice}</div>
           </div>
 
           <ResponsiveContainer width="100%" height={260}>
