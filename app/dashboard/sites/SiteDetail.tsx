@@ -91,6 +91,26 @@ const toFixedOrDash = (value: number | null | undefined, digits = 2) =>
 
 const toUTCDateOnly = (timestamp: string) => timestamp.slice(0, 10);
 
+function MiniSparkline({ points, color = "#2f80ed" }: { points: number[]; color?: string }) {
+  if (!points.length) return <div className="h-7" />;
+  const max = Math.max(...points);
+  const min = Math.min(...points);
+  const w = 100;
+  const h = 26;
+  const d = points
+    .map((p, i) => {
+      const x = (i / Math.max(points.length - 1, 1)) * w;
+      const y = h - ((p - min) / (max - min || 1)) * h;
+      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="h-7 w-full opacity-90">
+      <path d={d} fill="none" stroke={color} strokeWidth="1.7" />
+    </svg>
+  );
+}
+
 export default function SiteDetail({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
   const [selectedDate, setSelectedDate] = useState(formatKSTDate());
@@ -397,6 +417,14 @@ export default function SiteDetail({ site }: { site: Site }) {
     return last ?? "-";
   }, [dailyStats]);
 
+  const sparkWind = useMemo(
+    () => monthRows.filter((r) => r.channel === "ch1").slice(-12).map((r) => r.avg_value ?? 0),
+    [monthRows],
+  );
+  const sparkCoverage = useMemo(() => monthRows.filter((r) => r.channel === "ch1").slice(-12).map((r) => (r.data_count ? 1 : 0)), [monthRows]);
+  const sparkSync = useMemo(() => monthRows.slice(-12).map((r) => (r.avg_value != null ? 1 : 0)), [monthRows]);
+  const sparkFail = useMemo(() => monthRows.slice(-12).map((r) => (r.std_value != null && r.std_value > 3 ? 1 : 0)), [monthRows]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -429,21 +457,25 @@ export default function SiteDetail({ site }: { site: Site }) {
       {tab === "overview" && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-4">
-              <p className="text-xs text-slate-500 uppercase">평균 풍속 ({selectedMonth})</p>
-              <p className="text-2xl font-semibold text-slate-900 mt-2">{toFixedOrDash(monthAvgWind, 2)} m/s</p>
+            <div className="rounded-2xl border border-[#d6e8ff] bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_24px_rgba(10,37,64,0.06)]">
+              <p className="text-[11px] text-slate-500 uppercase">🌬 평균 풍속 ({selectedMonth})</p>
+              <p className="text-4xl font-semibold text-slate-900 mt-2 leading-none">{toFixedOrDash(monthAvgWind, 2)}<span className="text-sm text-slate-500 ml-1">m/s</span></p>
+              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">▲ stable</span><MiniSparkline points={sparkWind} color="#2f80ed" /></div>
             </div>
-            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-4">
-              <p className="text-xs text-slate-500 uppercase">월 데이터 커버리지</p>
-              <p className="text-2xl font-semibold text-slate-900 mt-2">{monthCoverage}%</p>
+            <div className="rounded-2xl border border-[#d6e8ff] bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_24px_rgba(10,37,64,0.06)]">
+              <p className="text-[11px] text-slate-500 uppercase">📊 데이터 커버리지</p>
+              <p className="text-4xl font-semibold text-slate-900 mt-2 leading-none">{monthCoverage}<span className="text-sm text-slate-500 ml-1">%</span></p>
+              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">● monthly</span><MiniSparkline points={sparkCoverage} color="#10b981" /></div>
             </div>
-            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-4">
-              <p className="text-xs text-slate-500 uppercase">최근 동기화일</p>
-              <p className="text-2xl font-semibold text-slate-900 mt-2">{latestDataDate}</p>
+            <div className="rounded-2xl border border-[#d6e8ff] bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_24px_rgba(10,37,64,0.06)]">
+              <p className="text-[11px] text-slate-500 uppercase">🔄 최근 동기화일</p>
+              <p className="text-3xl font-semibold text-slate-900 mt-2 leading-none">{latestDataDate}</p>
+              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">▲ up</span><MiniSparkline points={sparkSync} color="#8b5cf6" /></div>
             </div>
-            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-4">
-              <p className="text-xs text-slate-500 uppercase">관측 일수 ({selectedMonth})</p>
-              <p className="text-2xl font-semibold text-slate-900 mt-2">{new Set(monthRows.filter((r) => r.channel === "ch1").map((r) => r.date)).size}일</p>
+            <div className="rounded-2xl border border-[#d6e8ff] bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_24px_rgba(10,37,64,0.06)]">
+              <p className="text-[11px] text-slate-500 uppercase">🚨 품질 알림 추세</p>
+              <p className="text-4xl font-semibold text-slate-900 mt-2 leading-none">{new Set(monthRows.filter((r) => r.channel === "ch1").map((r) => r.date)).size}<span className="text-sm text-slate-500 ml-1">days</span></p>
+              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-50 text-rose-700">▼ alert</span><MiniSparkline points={sparkFail} color="#ef4444" /></div>
             </div>
           </div>
 
