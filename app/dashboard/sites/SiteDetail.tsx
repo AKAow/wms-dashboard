@@ -640,6 +640,18 @@ export default function SiteDetail({ site }: { site: Site }) {
     return { p50, p75, p90, avgWind, avgP50, avgP75, avgP90, loss: AGE_LOSS_MAP[turbineAgeBand] };
   }, [simulationRows, turbineAgeBand]);
 
+  const simulationAssessment = useMemo(() => {
+    const coverage = monthCoverage;
+    const wind = simulationSummary.avgWind;
+    if (coverage >= 80 && wind >= 6.5) {
+      return { grade: "타당", tone: "text-emerald-700 bg-emerald-50 border-emerald-200", reason: "풍황/커버리지 기준 충족" };
+    }
+    if (coverage >= 60 && wind >= 5.5) {
+      return { grade: "조건부 타당", tone: "text-amber-700 bg-amber-50 border-amber-200", reason: "추가 관측 또는 가정 점검 필요" };
+    }
+    return { grade: "보류", tone: "text-rose-700 bg-rose-50 border-rose-200", reason: "데이터 품질 또는 풍황 기준 미달" };
+  }, [monthCoverage, simulationSummary.avgWind]);
+
   return (
     <div className="space-y-6 sitekit">
       <div className="topbar">
@@ -1049,6 +1061,11 @@ export default function SiteDetail({ site }: { site: Site }) {
           <h3 className="text-sm font-semibold text-slate-900">사업성 시뮬레이션</h3>
           <p className="text-xs text-slate-600">연식 기반 손실률과 적용 구간을 선택해 P50/P75/P90 추정치를 계산합니다.</p>
 
+          <div className={`rounded-lg border px-3 py-2 text-sm inline-flex items-center gap-2 ${simulationAssessment.tone}`}>
+            <b>사업성 평가: {simulationAssessment.grade}</b>
+            <span className="text-xs">({simulationAssessment.reason})</span>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
             <label className="space-y-1">
               <span className="text-xs text-slate-500 inline-flex items-center gap-2">터빈 연식 구간 <b className="text-slate-700">손실률 {Math.round(simulationSummary.loss * 100)}%</b></span>
@@ -1149,6 +1166,14 @@ export default function SiteDetail({ site }: { site: Site }) {
                 </tr>
               </thead>
               <tbody>
+                <tr className="sticky top-0 bg-blue-50 border-b border-[#cfe3ff] text-slate-800 font-semibold">
+                  <td className="px-2 py-2">통합</td>
+                  <td className="px-2 py-2 text-right">{toFixedOrDash(simulationSummary.avgWind, 2)} m/s</td>
+                  <td className="px-2 py-2 text-right">{toFixedOrDash(simulationSummary.avgP50, 1)}</td>
+                  <td className="px-2 py-2 text-right">{toFixedOrDash(simulationSummary.avgP75, 1)}</td>
+                  <td className="px-2 py-2 text-right">{toFixedOrDash(simulationSummary.avgP90, 1)}</td>
+                  <td className="px-2 py-2 text-right">{Math.round(simulationSummary.loss * 100)}%</td>
+                </tr>
                 {simulationRows.map((r) => (
                   <tr key={r.label} className="border-b border-[#e6f0ff] text-slate-700">
                     <td className="px-2 py-2">{r.label}</td>
