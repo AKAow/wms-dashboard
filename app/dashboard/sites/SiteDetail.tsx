@@ -1096,7 +1096,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <label className="space-y-1">
               <span className="text-xs text-slate-500 inline-flex items-center gap-2 whitespace-nowrap">터빈 연식 구간 <b className="text-slate-700">손실률 {Math.round(simulationSummary.loss * 100)}%</b></span>
               <select value={turbineAgeBand} onChange={(e) => setTurbineAgeBand(e.target.value as "0-5" | "6-10" | "11-15" | "16+")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
@@ -1114,35 +1114,40 @@ export default function SiteDetail({ site }: { site: Site }) {
                 ))}
               </select>
             </label>
-            <label className="space-y-1">
-              <span className="text-xs text-slate-500">적용기간 프리셋</span>
-              <select value={simPreset} onChange={(e) => setSimPreset(e.target.value as "3M" | "6M" | "12M" | "custom")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
-                <option value="3M">최근 3개월</option>
-                <option value="6M">최근 6개월</option>
-                <option value="12M">최근 12개월</option>
-                <option value="custom">커스텀</option>
-              </select>
-            </label>
-            <label className="space-y-1">
-              <span className="text-xs text-slate-500">적용 시작일</span>
-              <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.start} onChange={(e) => setSimStartDate(e.target.value)} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800 disabled:bg-slate-100" />
-            </label>
-            <label className="space-y-1">
-              <span className="text-xs text-slate-500">적용 종료일</span>
-              <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.end} onChange={(e) => setSimEndDate(e.target.value)} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800 disabled:bg-slate-100" />
-            </label>
           </div>
 
-          <div className="space-y-1">
-            <span className="text-xs text-slate-500">표시 기준</span>
-            <div className="seg">
-              {([
-                { key: "daily", label: "일별" },
-                { key: "weekly", label: "주별" },
-                { key: "monthly", label: "월별" },
-              ] as const).map((p) => (
-                <span key={p.key} className={simPeriod === p.key ? "on" : ""} onClick={() => setSimPeriod(p.key)}>{p.label}</span>
-              ))}
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-2">
+            <div className="space-y-1">
+              <span className="text-xs text-slate-500">표시 기준</span>
+              <div className="seg">
+                {([
+                  { key: "daily", label: "일별" },
+                  { key: "weekly", label: "주별" },
+                  { key: "monthly", label: "월별" },
+                ] as const).map((p) => (
+                  <span key={p.key} className={simPeriod === p.key ? "on" : ""} onClick={() => setSimPeriod(p.key)}>{p.label}</span>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-2 text-xs">
+              <label className="space-y-1">
+                <span className="text-slate-500">적용기간</span>
+                <select value={simPreset} onChange={(e) => setSimPreset(e.target.value as "3M" | "6M" | "12M" | "custom")} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800">
+                  <option value="3M">3M</option>
+                  <option value="6M">6M</option>
+                  <option value="12M">12M</option>
+                  <option value="custom">커스텀</option>
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-slate-500">시작</span>
+                <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.start} onChange={(e) => setSimStartDate(e.target.value)} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
+              </label>
+              <label className="space-y-1">
+                <span className="text-slate-500">종료</span>
+                <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.end} onChange={(e) => setSimEndDate(e.target.value)} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
+              </label>
             </div>
           </div>
 
