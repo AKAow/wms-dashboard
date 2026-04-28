@@ -123,6 +123,7 @@ export default function SiteDetail({ site }: { site: Site }) {
   const [outputPeriod, setOutputPeriod] = useState<"1W" | "1M" | "1Y">("1M");
   const [overviewPeriod, setOverviewPeriod] = useState<"1W" | "1M" | "1Y">("1M");
   const [simPeriod, setSimPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [simPreset, setSimPreset] = useState<"3M" | "6M" | "12M" | "custom">("6M");
   const [simStartDate, setSimStartDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 6);
@@ -547,9 +548,17 @@ export default function SiteDetail({ site }: { site: Site }) {
     }));
   }, [estimateDailyRows, overviewPeriod, dailyStats]);
 
+  const effectiveSimDates = useMemo(() => {
+    if (simPreset === "custom") return { start: simStartDate, end: simEndDate };
+    const end = new Date();
+    const start = new Date();
+    start.setMonth(start.getMonth() - (simPreset === "3M" ? 3 : simPreset === "6M" ? 6 : 12));
+    return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+  }, [simPreset, simStartDate, simEndDate]);
+
   const simulationDailyRows = useMemo(() => {
-    const start = new Date(`${simStartDate}T00:00:00`);
-    const end = new Date(`${simEndDate}T23:59:59`);
+    const start = new Date(`${effectiveSimDates.start}T00:00:00`);
+    const end = new Date(`${effectiveSimDates.end}T23:59:59`);
 
     const baseRows = dailyStats
       .filter((r) => r.channel === "ch1" && typeof r.avg_value === "number")
@@ -571,7 +580,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       const p90 = p50 * 0.84;
       return { date: r.date, wind: v, p50, p75, p90 };
     });
-  }, [dailyStats, simStartDate, simEndDate, turbineAgeBand]);
+  }, [dailyStats, effectiveSimDates, turbineAgeBand]);
 
   const simulationRows = useMemo(() => {
     if (simPeriod === "daily") {
@@ -624,7 +633,11 @@ export default function SiteDetail({ site }: { site: Site }) {
     const p50 = simulationRows.reduce((a, b) => a + b.p50, 0);
     const p75 = simulationRows.reduce((a, b) => a + b.p75, 0);
     const p90 = simulationRows.reduce((a, b) => a + b.p90, 0);
-    return { p50, p75, p90, loss: AGE_LOSS_MAP[turbineAgeBand] };
+    const avgWind = simulationRows.length ? simulationRows.reduce((a, b) => a + b.wind, 0) / simulationRows.length : 0;
+    const avgP50 = simulationRows.length ? p50 / simulationRows.length : 0;
+    const avgP75 = simulationRows.length ? p75 / simulationRows.length : 0;
+    const avgP90 = simulationRows.length ? p90 / simulationRows.length : 0;
+    return { p50, p75, p90, avgWind, avgP50, avgP75, avgP90, loss: AGE_LOSS_MAP[turbineAgeBand] };
   }, [simulationRows, turbineAgeBand]);
 
   return (
@@ -1047,12 +1060,21 @@ export default function SiteDetail({ site }: { site: Site }) {
               </select>
             </label>
             <label className="space-y-1">
+              <span className="text-xs text-slate-500">적용기간 프리셋</span>
+              <select value={simPreset} onChange={(e) => setSimPreset(e.target.value as "3M" | "6M" | "12M" | "custom")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
+                <option value="3M">최근 3개월</option>
+                <option value="6M">최근 6개월</option>
+                <option value="12M">최근 12개월</option>
+                <option value="custom">커스텀</option>
+              </select>
+            </label>
+            <label className="space-y-1">
               <span className="text-xs text-slate-500">적용 시작일</span>
-              <input type="date" value={simStartDate} onChange={(e) => setSimStartDate(e.target.value)} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800" />
+              <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.start} onChange={(e) => setSimStartDate(e.target.value)} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800 disabled:bg-slate-100" />
             </label>
             <label className="space-y-1">
               <span className="text-xs text-slate-500">적용 종료일</span>
-              <input type="date" value={simEndDate} onChange={(e) => setSimEndDate(e.target.value)} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800" />
+              <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.end} onChange={(e) => setSimEndDate(e.target.value)} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800 disabled:bg-slate-100" />
             </label>
           </div>
 
@@ -1074,6 +1096,19 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">누적 P50</div><div className="text-slate-900 font-semibold mt-1">{toFixedOrDash(simulationSummary.p50, 1)} MWh</div></div>
             <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">누적 P75</div><div className="text-slate-900 font-semibold mt-1">{toFixedOrDash(simulationSummary.p75, 1)} MWh</div></div>
             <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">누적 P90</div><div className="text-slate-900 font-semibold mt-1">{toFixedOrDash(simulationSummary.p90, 1)} MWh</div></div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div className="rounded-lg border border-[#d6e8ff] bg-white/60 p-3"><div className="text-slate-500 text-xs">평균 풍속</div><div className="font-semibold text-slate-900 mt-1">{toFixedOrDash(simulationSummary.avgWind, 2)} m/s</div></div>
+            <div className="rounded-lg border border-[#d6e8ff] bg-white/60 p-3"><div className="text-slate-500 text-xs">평균 P50</div><div className="font-semibold text-slate-900 mt-1">{toFixedOrDash(simulationSummary.avgP50, 1)} MWh</div></div>
+            <div className="rounded-lg border border-[#d6e8ff] bg-white/60 p-3"><div className="text-slate-500 text-xs">평균 P75</div><div className="font-semibold text-slate-900 mt-1">{toFixedOrDash(simulationSummary.avgP75, 1)} MWh</div></div>
+            <div className="rounded-lg border border-[#d6e8ff] bg-white/60 p-3"><div className="text-slate-500 text-xs">평균 P90</div><div className="font-semibold text-slate-900 mt-1">{toFixedOrDash(simulationSummary.avgP90, 1)} MWh</div></div>
+          </div>
+
+          <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-600 space-y-1">
+            <div><b>P50</b>: 기준 시나리오에서 초과 달성 확률이 약 50%인 중간값 추정치</div>
+            <div><b>P75</b>: 보수적 관점의 추정치(초과 달성 확률 약 75%)</div>
+            <div><b>P90</b>: 매우 보수적 추정치(초과 달성 확률 약 90%)</div>
           </div>
 
           <ResponsiveContainer width="100%" height={260}>
