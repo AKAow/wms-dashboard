@@ -453,6 +453,35 @@ export default function SiteDetail({ site }: { site: Site }) {
     });
   }, [sensorWindRows]);
 
+  const estimateModel = useMemo(() => {
+    const [y, m] = selectedMonth.split("-").map(Number);
+    const daysInMonth = y && m ? new Date(y, m, 0).getDate() : 30;
+    const v = monthAvgWind ?? 0;
+    const ratedPowerMw = 4.2;
+    const grossCf = Math.min(Math.max((v - 3) / 9, 0), 1) ** 3;
+    const netCf = Math.min(grossCf * 0.9, 0.62);
+    const grossMwh = ratedPowerMw * 24 * daysInMonth * netCf;
+    const losses = 0.17;
+    const p50 = grossMwh * (1 - losses);
+    const p75 = p50 * 0.92;
+    const p90 = p50 * 0.84;
+
+    const sampleDays = new Set(monthRows.filter((r) => r.channel === "ch1").map((r) => r.date)).size;
+    const qualityScore = Math.max(0, Math.min(100, Math.round(monthCoverage * 0.7 + (sampleDays / daysInMonth) * 30)));
+
+    return {
+      ratedPowerMw,
+      losses,
+      p50,
+      p75,
+      p90,
+      qualityScore,
+      sampleDays,
+      daysInMonth,
+      netCf: netCf * 100,
+    };
+  }, [selectedMonth, monthAvgWind, monthRows, monthCoverage]);
+
   return (
     <div className="space-y-6 sitekit">
       <div className="topbar">
@@ -606,13 +635,24 @@ export default function SiteDetail({ site }: { site: Site }) {
               <div className="panel-head">
                 <div>
                   <div className="p-title">Site info</div>
-                  <div className="p-sub">Location and device profile</div>
+                  <div className="p-sub">Location and bankable estimate basis</div>
                 </div>
               </div>
               <div className="space-y-3 text-sm">
                 {[["사이트 번호", site.site_number], ["위치명", site.location_name ?? "-"], ["위도", site.latitude != null ? `${toFixedOrDash(site.latitude, 6)}° N` : "-"], ["경도", site.longitude != null ? `${toFixedOrDash(site.longitude, 6)}° E` : "-"], ["고도", site.elevation != null ? `${toFixedOrDash(site.elevation, 1)} m` : "-"], ["iPack", site.ipack_email ?? "-"]].map(([l, v]) => (
                   <div key={l} className="flex justify-between gap-4"><span className="text-slate-500">{l}</span><span className="text-slate-800 font-mono text-xs text-right">{v}</span></div>
                 ))}
+              </div>
+              <div className="mt-4 rounded-lg border border-[#d6e8ff] bg-white/70 p-3 space-y-2">
+                <div className="text-xs font-semibold text-slate-700">사업성 추정 (근거 공개)</div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="rounded bg-blue-50 p-2"><div className="text-slate-500">P50</div><div className="font-semibold text-slate-900">{toFixedOrDash(estimateModel.p50, 0)} MWh</div></div>
+                  <div className="rounded bg-blue-50 p-2"><div className="text-slate-500">P75</div><div className="font-semibold text-slate-900">{toFixedOrDash(estimateModel.p75, 0)} MWh</div></div>
+                  <div className="rounded bg-blue-50 p-2"><div className="text-slate-500">P90</div><div className="font-semibold text-slate-900">{toFixedOrDash(estimateModel.p90, 0)} MWh</div></div>
+                </div>
+                <div className="text-[11px] text-slate-600">가정: 정격 {estimateModel.ratedPowerMw}MW · 손실 {Math.round(estimateModel.losses * 100)}% · 순CF {toFixedOrDash(estimateModel.netCf, 1)}%</div>
+                <div className="text-[11px] text-slate-600">품질점수: {estimateModel.qualityScore}/100 (관측일수 {estimateModel.sampleDays}/{estimateModel.daysInMonth})</div>
+                <div className="text-[11px] text-amber-700">※ 본 값은 사업성 검토용 추정치이며 발전량 보증값이 아닙니다.</div>
               </div>
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <button onClick={() => setTab("daily")} className="rounded-lg border border-[#c8def8] bg-white/80 px-3 py-2 text-xs text-slate-700 hover:bg-blue-50">일간 데이터 보기</button>
