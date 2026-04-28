@@ -131,6 +131,7 @@ export default function SiteDetail({ site }: { site: Site }) {
   });
   const [simEndDate, setSimEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [turbineAgeBand, setTurbineAgeBand] = useState<"0-5" | "6-10" | "11-15" | "16+">("6-10");
+  const [turbineMw, setTurbineMw] = useState<number>(4.2);
   const [selectedDate, setSelectedDate] = useState(formatKSTDate());
   const [selectedMonth, setSelectedMonth] = useState(formatKSTMonth());
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -489,7 +490,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       .filter((r) => r.channel === "ch1" && typeof r.avg_value === "number")
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    const ratedPowerMw = 4.2;
+    const ratedPowerMw = turbineMw;
     const losses = 0.17;
     return byDate.map((r) => {
       const v = r.avg_value as number;
@@ -508,7 +509,7 @@ export default function SiteDetail({ site }: { site: Site }) {
         quality,
       };
     });
-  }, [monthRows]);
+  }, [monthRows, turbineMw]);
 
   const estimateRowsForPeriod = useMemo(() => {
     if (overviewPeriod === "1W") {
@@ -523,7 +524,7 @@ export default function SiteDetail({ site }: { site: Site }) {
     for (const row of dailyStats.filter((r) => r.channel === "ch1" && typeof r.avg_value === "number")) {
       const key = row.date.slice(0, 7);
       const v = row.avg_value as number;
-      const ratedPowerMw = 4.2;
+      const ratedPowerMw = turbineMw;
       const grossCf = Math.min(Math.max((v - 3) / 9, 0), 1) ** 3;
       const netCf = Math.min(grossCf * 0.9, 0.62);
       const p50 = ratedPowerMw * 24 * netCf * (1 - 0.17);
@@ -546,7 +547,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       p90: r.p90Sum,
       quality: r.qualityScore >= r.count * 1.5 ? "정상" : r.qualityScore >= r.count ? "주의" : "낮음",
     }));
-  }, [estimateDailyRows, overviewPeriod, dailyStats]);
+  }, [estimateDailyRows, overviewPeriod, dailyStats, turbineMw]);
 
   const effectiveSimDates = useMemo(() => {
     if (simPreset === "custom") return { start: simStartDate, end: simEndDate };
@@ -569,7 +570,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       .sort((a, b) => a.date.localeCompare(b.date));
 
     const loss = AGE_LOSS_MAP[turbineAgeBand];
-    const ratedPowerMw = 4.2;
+    const ratedPowerMw = turbineMw;
 
     return baseRows.map((r) => {
       const v = r.avg_value as number;
@@ -580,7 +581,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       const p90 = p50 * 0.84;
       return { date: r.date, wind: v, p50, p75, p90 };
     });
-  }, [dailyStats, effectiveSimDates, turbineAgeBand]);
+  }, [dailyStats, effectiveSimDates, turbineAgeBand, turbineMw]);
 
   const simulationRows = useMemo(() => {
     if (simPeriod === "daily") {
@@ -1066,7 +1067,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             <span className="text-xs">({simulationAssessment.reason})</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <label className="space-y-1">
               <span className="text-xs text-slate-500 inline-flex items-center gap-2">터빈 연식 구간 <b className="text-slate-700">손실률 {Math.round(simulationSummary.loss * 100)}%</b></span>
               <select value={turbineAgeBand} onChange={(e) => setTurbineAgeBand(e.target.value as "0-5" | "6-10" | "11-15" | "16+")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
@@ -1076,6 +1077,19 @@ export default function SiteDetail({ site }: { site: Site }) {
                 <option value="16+">16년 이상 (22%)</option>
               </select>
             </label>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">터빈 용량 (MW)</span>
+              <select value={String(turbineMw)} onChange={(e) => setTurbineMw(Number(e.target.value))} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
+                <option value="3.6">3.6 MW</option>
+                <option value="4.0">4.0 MW</option>
+                <option value="4.2">4.2 MW</option>
+                <option value="4.5">4.5 MW</option>
+                <option value="5.0">5.0 MW</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
             <label className="space-y-1">
               <span className="text-xs text-slate-500">적용기간 프리셋</span>
               <select value={simPreset} onChange={(e) => setSimPreset(e.target.value as "3M" | "6M" | "12M" | "custom")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
