@@ -70,7 +70,7 @@ export default function DashboardPage() {
             sites.map((site) => (
               <Link
                 key={site.id}
-                href={`/dashboard/sites/${site.id}`}
+                href={`/dashboard/sites?id=${encodeURIComponent(site.id)}`}
                 className="flex items-center justify-between p-4 hover:bg-slate-800/30 transition-colors"
               >
                 <div className="flex items-center gap-3">

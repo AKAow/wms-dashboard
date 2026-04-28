@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 import { Wind, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function LoginPage() {

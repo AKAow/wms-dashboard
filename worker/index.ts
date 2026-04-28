@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 export interface Env {
   NRG_CLIENT_ID: string;
   NRG_CLIENT_SECRET: string;
@@ -16,9 +18,19 @@ export interface Env {
   CLOUDFLARE_SCRIPT_NAME?: string; // default: wms-rld-worker
 }
 
+type ScheduledEvent = {
+  cron: string;
+  scheduledTime: number;
+};
+
+type ExecutionContext = {
+  waitUntil(promise: Promise<unknown>): void;
+};
+
 const NRG_BASE = "https://cloud-api.nrgsystems.com/nrgcloudcustomerapi/";
 
 type ParsedRow = Record<string, string | number | null>;
+type MeasurementRow = ParsedRow & { site_id: string; timestamp?: string | number | null };
 
 async function getNRGToken(clientId: string, secret: string): Promise<string> {
   const r = await fetch(NRG_BASE + "token", {
@@ -193,7 +205,7 @@ async function processRldFile(env: Env, fileName: string, fileBuffer: ArrayBuffe
     siteId = sites[0].id;
   }
 
-  const rows = records.map((r) => ({ ...r, site_id: siteId }));
+  const rows: MeasurementRow[] = records.map((r) => ({ ...r, site_id: siteId }));
   let inserted = 0;
   for (let i = 0; i < rows.length; i += 500) {
     await sbFetch(env, `/rest/v1/measurements`, {
@@ -300,18 +312,41 @@ function walkParts(parts: any[] | undefined, out: any[] = []): any[] {
 const KST_DAYS = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"] as const;
 type KstDay = (typeof KST_DAYS)[number];
 
+const JS_DAY_TO_KST: KstDay[] = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
+
+function kstDayToJsDay(day: KstDay): number {
+  if (day === "일요일") return 0;
+  return KST_DAYS.indexOf(day) + 1;
+}
+
+function jsDayToKstDay(jsDay: number): KstDay | null {
+  return JS_DAY_TO_KST[jsDay] ?? null;
+}
+
 function dayToCron(day: KstDay): string {
-  const kstIndex = KST_DAYS.indexOf(day);
-  if (kstIndex < 0) throw new Error("invalid-day");
-  // For 06:00 KST fixed time, Cloudflare UTC DOW maps directly to this order.
-  return `0 21 * * ${kstIndex}`;
+  const kstJsDay = kstDayToJsDay(day);
+  // 06:00 KST == 21:00 UTC(previous day)
+  const utcDow = (kstJsDay + 6) % 7;
+  return `0 21 * * ${utcDow}`;
 }
 
 function cronToDayKst(cron: string): KstDay | null {
-  const m = cron.trim().match(/^0\s+21\s+\*\s+\*\s+([0-6])$/);
+  const m = cron.trim().match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+([0-7])$/);
   if (!m) return null;
-  const utcDow = Number(m[1]);
-  return KST_DAYS[utcDow] ?? null;
+
+  const minute = Number(m[1]);
+  const hour = Number(m[2]);
+  const rawDow = Number(m[3]);
+  if (Number.isNaN(minute) || Number.isNaN(hour) || Number.isNaN(rawDow)) return null;
+  if (minute < 0 || minute > 59 || hour < 0 || hour > 23) return null;
+
+  const utcDow = rawDow === 7 ? 0 : rawDow;
+  if (utcDow < 0 || utcDow > 6) return null;
+
+  const kstHour = hour + 9;
+  const dayShift = kstHour >= 24 ? 1 : 0;
+  const kstJsDay = (utcDow + dayShift) % 7;
+  return jsDayToKstDay(kstJsDay);
 }
 
 async function getCronConfig(env: Env): Promise<Response> {
@@ -467,7 +502,7 @@ async function runScheduledSync(env: Env): Promise<Response> {
   return new Response(JSON.stringify({ ok: true, processed, skipped, checked_messages: checkedMessages, enabled_sites: targets.length, scanned_sites: limitedTargets.length, results }));
 }
 
-export default {
+const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const cors = {
       "Access-Control-Allow-Origin": "*",
@@ -517,3 +552,5 @@ export default {
     ctx.waitUntil(runScheduledSync(env));
   },
 };
+
+export default worker;

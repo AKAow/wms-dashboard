@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Wind, LayoutDashboard, MapPin, Users, Database, Settings, LogOut, Menu, X } from "lucide-react";
 
@@ -14,23 +14,16 @@ const navItems = [
   { href: "/dashboard/settings", label: "설정", icon: Settings },
 ];
 
-export default function Sidebar() {
-  const pathname = usePathname();
-  const router = useRouter();
-  const supabase = createClient();
-  const [open, setOpen] = useState(false);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/login/";
-  };
-
-  const isActive = (href: string) => {
-    if (href === "/dashboard") return pathname === "/dashboard" || pathname === "/dashboard/";
-    return pathname.startsWith(href);
-  };
-
-  const NavContent = () => (
+function NavContent({
+  isActive,
+  onNavigate,
+  onLogout,
+}: {
+  isActive: (href: string) => boolean;
+  onNavigate: () => void;
+  onLogout: () => void;
+}) {
+  return (
     <>
       {/* 로고 */}
       <div className="p-5 border-b border-slate-800/60">
@@ -51,7 +44,7 @@ export default function Sidebar() {
           <Link
             key={href}
             href={href}
-            onClick={() => setOpen(false)}
+            onClick={onNavigate}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
               isActive(href)
                 ? "bg-blue-600/20 text-blue-400 font-medium"
@@ -67,7 +60,7 @@ export default function Sidebar() {
       {/* 로그아웃 */}
       <div className="p-3 border-t border-slate-800/60">
         <button
-          onClick={handleLogout}
+          onClick={onLogout}
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:text-red-400 hover:bg-red-400/10 transition-all"
         >
           <LogOut className="w-4 h-4" />
@@ -76,6 +69,22 @@ export default function Sidebar() {
       </div>
     </>
   );
+}
+
+export default function Sidebar() {
+  const pathname = usePathname();
+  const supabase = createClient();
+  const [open, setOpen] = useState(false);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = "/login/";
+  };
+
+  const isActive = (href: string) => {
+    if (href === "/dashboard") return pathname === "/dashboard" || pathname === "/dashboard/";
+    return pathname.startsWith(href);
+  };
 
   return (
     <>
@@ -108,7 +117,11 @@ export default function Sidebar() {
         >
           <X className="w-4 h-4" />
         </button>
-        <NavContent />
+        <NavContent
+          isActive={isActive}
+          onNavigate={() => setOpen(false)}
+          onLogout={handleLogout}
+        />
       </aside>
     </>
   );

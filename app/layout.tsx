@@ -14,7 +14,6 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
-        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link
           href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap"
           rel="stylesheet"

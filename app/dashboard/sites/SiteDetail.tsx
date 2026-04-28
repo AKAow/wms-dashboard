@@ -198,11 +198,17 @@ export default function SiteDetail({ site }: { site: Site }) {
   }, [site.id, supabase]);
 
   useEffect(() => {
-    if (tab === "daily") loadMeasurements();
+    if (tab !== "daily") return;
+    queueMicrotask(() => {
+      void loadMeasurements();
+    });
   }, [tab, selectedDate, loadMeasurements]);
 
   useEffect(() => {
-    if (tab === "monthly" || tab === "overview") loadMonthlyStats();
+    if (tab !== "monthly" && tab !== "overview") return;
+    queueMicrotask(() => {
+      void loadMonthlyStats();
+    });
   }, [tab, selectedMonth, loadMonthlyStats]);
 
   const dailyExcelData = useMemo(() => {
