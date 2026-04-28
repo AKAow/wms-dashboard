@@ -293,9 +293,7 @@ export default function SiteDetail({ site }: { site: Site }) {
     ch5: vals.ch5 ?? 0,
   }));
 
-  const overviewChartSeries = useMemo(() => {
-    return overviewChartData.slice(-overviewPeriod);
-  }, [overviewChartData, overviewPeriod]);
+  const overviewChartSeries = useMemo(() => overviewChartData, [overviewChartData]);
 
   const excelMonthlyChartData = useMemo(() => {
     const rows = selectedMonthStats
@@ -596,11 +594,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <div className="p-title">풍속 출력 추이</div>
                   <div className="p-sub">기간별 센서 풍속 추세</div>
                 </div>
-                <div className="seg">
-                  {(["1W", "1M", "1Y"] as const).map((p) => (
-                    <span key={p} className={overviewPeriod === p ? "on" : ""} onClick={() => setOverviewPeriod(p)}>{p}</span>
-                  ))}
-                </div>
+                <div />
               </div>
               {overviewChartSeries.length === 0 ? (
                 <div className="text-sm text-slate-500 py-10 text-center">월간 데이터가 없습니다</div>
@@ -659,8 +653,8 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <div className="p-sub">신뢰구간(P50/P75/P90) 포함 일별 추정값</div>
                 </div>
                 <div className="seg">
-                  {[7, 14, 30].map((p) => (
-                    <span key={p} className={overviewPeriod === p ? "on" : ""} onClick={() => setOverviewPeriod(p as 7 | 14 | 30)}>{p}D</span>
+                  {(["1W", "1M", "1Y"] as const).map((p) => (
+                    <span key={p} className={overviewPeriod === p ? "on" : ""} onClick={() => setOverviewPeriod(p)}>{p}</span>
                   ))}
                 </div>
               </div>
