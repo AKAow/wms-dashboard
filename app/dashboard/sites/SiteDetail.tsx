@@ -113,6 +113,7 @@ function MiniSparkline({ points, color = "#2f80ed" }: { points: number[]; color?
 
 export default function SiteDetail({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
+  const [outputPeriod, setOutputPeriod] = useState<"1W" | "1M" | "1Y">("1M");
   const [overviewPeriod, setOverviewPeriod] = useState<"1W" | "1M" | "1Y">("1M");
   const [selectedDate, setSelectedDate] = useState(formatKSTDate());
   const [selectedMonth, setSelectedMonth] = useState(formatKSTMonth());
@@ -293,7 +294,55 @@ export default function SiteDetail({ site }: { site: Site }) {
     ch5: vals.ch5 ?? 0,
   }));
 
-  const overviewChartSeries = useMemo(() => overviewChartData, [overviewChartData]);
+  const overviewChartSeries = useMemo(() => {
+    if (outputPeriod === "1W") return overviewChartData.slice(-7);
+    if (outputPeriod === "1M") {
+      const weekMap = new Map<string, { date: string; ch1: number; ch2: number; ch3: number; ch4: number; ch5: number; count: number }>();
+      for (const row of overviewChartData) {
+        const dd = Number(row.date.split("-")[1] ?? "1");
+        const w = Math.ceil(dd / 7);
+        const key = `${selectedMonth.split("-")[1]}월 ${w}주`;
+        const prev = weekMap.get(key) ?? { date: key, ch1: 0, ch2: 0, ch3: 0, ch4: 0, ch5: 0, count: 0 };
+        prev.ch1 += row.ch1;
+        prev.ch2 += row.ch2;
+        prev.ch3 += row.ch3;
+        prev.ch4 += row.ch4;
+        prev.ch5 += row.ch5;
+        prev.count += 1;
+        weekMap.set(key, prev);
+      }
+      return Array.from(weekMap.values()).map((r) => ({
+        date: r.date,
+        ch1: r.count ? r.ch1 / r.count : 0,
+        ch2: r.count ? r.ch2 / r.count : 0,
+        ch3: r.count ? r.ch3 / r.count : 0,
+        ch4: r.count ? r.ch4 / r.count : 0,
+        ch5: r.count ? r.ch5 / r.count : 0,
+      }));
+    }
+
+    const monthMap = new Map<string, { date: string; ch1: number; ch2: number; ch3: number; ch4: number; ch5: number; count: number }>();
+    for (const row of dailyStats.filter((r) => ["ch1", "ch2", "ch3", "ch4", "ch5"].includes(r.channel) && typeof r.avg_value === "number")) {
+      const key = row.date.slice(0, 7);
+      const prev = monthMap.get(key) ?? { date: key, ch1: 0, ch2: 0, ch3: 0, ch4: 0, ch5: 0, count: 0 };
+      const v = row.avg_value as number;
+      if (row.channel === "ch1") prev.ch1 += v;
+      if (row.channel === "ch2") prev.ch2 += v;
+      if (row.channel === "ch3") prev.ch3 += v;
+      if (row.channel === "ch4") prev.ch4 += v;
+      if (row.channel === "ch5") prev.ch5 += v;
+      prev.count += 1;
+      monthMap.set(key, prev);
+    }
+    return Array.from(monthMap.values()).map((r) => ({
+      date: r.date,
+      ch1: r.count ? r.ch1 / r.count : 0,
+      ch2: r.count ? r.ch2 / r.count : 0,
+      ch3: r.count ? r.ch3 / r.count : 0,
+      ch4: r.count ? r.ch4 / r.count : 0,
+      ch5: r.count ? r.ch5 / r.count : 0,
+    }));
+  }, [outputPeriod, overviewChartData, selectedMonth, dailyStats]);
 
   const excelMonthlyChartData = useMemo(() => {
     const rows = selectedMonthStats
@@ -594,7 +643,11 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <div className="p-title">풍속 출력 추이</div>
                   <div className="p-sub">기간별 센서 풍속 추세</div>
                 </div>
-                <div />
+                <div className="seg">
+                  {(["1W", "1M", "1Y"] as const).map((p) => (
+                    <span key={p} className={outputPeriod === p ? "on" : ""} onClick={() => setOutputPeriod(p)}>{p}</span>
+                  ))}
+                </div>
               </div>
               {overviewChartSeries.length === 0 ? (
                 <div className="text-sm text-slate-500 py-10 text-center">월간 데이터가 없습니다</div>
