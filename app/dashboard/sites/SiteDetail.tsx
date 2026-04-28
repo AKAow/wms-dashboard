@@ -1092,17 +1092,29 @@ export default function SiteDetail({ site }: { site: Site }) {
           </div>
 
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">누적 P50</div><div className="text-slate-900 font-semibold mt-1">{toFixedOrDash(simulationSummary.p50, 1)} MWh</div></div>
-            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">누적 P75</div><div className="text-slate-900 font-semibold mt-1">{toFixedOrDash(simulationSummary.p75, 1)} MWh</div></div>
-            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">누적 P90</div><div className="text-slate-900 font-semibold mt-1">{toFixedOrDash(simulationSummary.p90, 1)} MWh</div></div>
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3">
+              <div className="text-slate-500 text-xs mb-2">누적 추정값</div>
+              <table className="w-full text-xs">
+                <tbody>
+                  <tr><td className="py-1 text-slate-600">P50</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.p50, 1)} MWh</td></tr>
+                  <tr><td className="py-1 text-slate-600">P75</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.p75, 1)} MWh</td></tr>
+                  <tr><td className="py-1 text-slate-600">P90</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.p90, 1)} MWh</td></tr>
+                </tbody>
+              </table>
+            </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            <div className="rounded-lg border border-[#d6e8ff] bg-white/60 p-3"><div className="text-slate-500 text-xs">평균 풍속</div><div className="font-semibold text-slate-900 mt-1">{toFixedOrDash(simulationSummary.avgWind, 2)} m/s</div></div>
-            <div className="rounded-lg border border-[#d6e8ff] bg-white/60 p-3"><div className="text-slate-500 text-xs">평균 P50</div><div className="font-semibold text-slate-900 mt-1">{toFixedOrDash(simulationSummary.avgP50, 1)} MWh</div></div>
-            <div className="rounded-lg border border-[#d6e8ff] bg-white/60 p-3"><div className="text-slate-500 text-xs">평균 P75</div><div className="font-semibold text-slate-900 mt-1">{toFixedOrDash(simulationSummary.avgP75, 1)} MWh</div></div>
-            <div className="rounded-lg border border-[#d6e8ff] bg-white/60 p-3"><div className="text-slate-500 text-xs">평균 P90</div><div className="font-semibold text-slate-900 mt-1">{toFixedOrDash(simulationSummary.avgP90, 1)} MWh</div></div>
+            <div className="rounded-lg border border-[#d6e8ff] bg-white/60 p-3">
+              <div className="text-slate-500 text-xs mb-2">기준 평균값</div>
+              <table className="w-full text-xs">
+                <tbody>
+                  <tr><td className="py-1 text-slate-600">평균 풍속</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.avgWind, 2)} m/s</td></tr>
+                  <tr><td className="py-1 text-slate-600">평균 P50</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.avgP50, 1)} MWh</td></tr>
+                  <tr><td className="py-1 text-slate-600">평균 P75</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.avgP75, 1)} MWh</td></tr>
+                  <tr><td className="py-1 text-slate-600">평균 P90</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.avgP90, 1)} MWh</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-600 space-y-1">
