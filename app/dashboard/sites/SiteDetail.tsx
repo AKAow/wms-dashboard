@@ -122,8 +122,13 @@ export default function SiteDetail({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
   const [outputPeriod, setOutputPeriod] = useState<"1W" | "1M" | "1Y">("1M");
   const [overviewPeriod, setOverviewPeriod] = useState<"1W" | "1M" | "1Y">("1M");
-  const [simPeriod, setSimPeriod] = useState<"1W" | "1M" | "1Y">("1M");
-  const [simRange, setSimRange] = useState<"3M" | "6M" | "12M">("6M");
+  const [simPeriod, setSimPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [simStartDate, setSimStartDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 6);
+    return d.toISOString().slice(0, 10);
+  });
+  const [simEndDate, setSimEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [turbineAgeBand, setTurbineAgeBand] = useState<"0-5" | "6-10" | "11-15" | "16+">("6-10");
   const [selectedDate, setSelectedDate] = useState(formatKSTDate());
   const [selectedMonth, setSelectedMonth] = useState(formatKSTMonth());
@@ -543,13 +548,15 @@ export default function SiteDetail({ site }: { site: Site }) {
   }, [estimateDailyRows, overviewPeriod, dailyStats]);
 
   const simulationDailyRows = useMemo(() => {
-    const months = simRange === "3M" ? 3 : simRange === "6M" ? 6 : 12;
-    const cutoff = new Date();
-    cutoff.setMonth(cutoff.getMonth() - months);
+    const start = new Date(`${simStartDate}T00:00:00`);
+    const end = new Date(`${simEndDate}T23:59:59`);
 
     const baseRows = dailyStats
       .filter((r) => r.channel === "ch1" && typeof r.avg_value === "number")
-      .filter((r) => new Date(`${r.date}T00:00:00`) >= cutoff)
+      .filter((r) => {
+        const x = new Date(`${r.date}T00:00:00`);
+        return x >= start && x <= end;
+      })
       .sort((a, b) => a.date.localeCompare(b.date));
 
     const loss = AGE_LOSS_MAP[turbineAgeBand];
@@ -564,14 +571,33 @@ export default function SiteDetail({ site }: { site: Site }) {
       const p90 = p50 * 0.84;
       return { date: r.date, wind: v, p50, p75, p90 };
     });
-  }, [dailyStats, simRange, turbineAgeBand]);
+  }, [dailyStats, simStartDate, simEndDate, turbineAgeBand]);
 
   const simulationRows = useMemo(() => {
-    if (simPeriod === "1W") {
-      return simulationDailyRows.slice(-7).map((r) => ({ ...r, label: r.date.slice(5) }));
-    }
-    if (simPeriod === "1M") {
+    if (simPeriod === "daily") {
       return simulationDailyRows.map((r) => ({ ...r, label: r.date.slice(5) }));
+    }
+    if (simPeriod === "weekly") {
+      const weekMap = new Map<string, { label: string; windSum: number; p50Sum: number; p75Sum: number; p90Sum: number; count: number }>();
+      for (const r of simulationDailyRows) {
+        const dd = Number(r.date.slice(-2));
+        const mm = Number(r.date.slice(5, 7));
+        const key = `${mm}월 ${Math.ceil(dd / 7)}주`;
+        const prev = weekMap.get(key) ?? { label: key, windSum: 0, p50Sum: 0, p75Sum: 0, p90Sum: 0, count: 0 };
+        prev.windSum += r.wind;
+        prev.p50Sum += r.p50;
+        prev.p75Sum += r.p75;
+        prev.p90Sum += r.p90;
+        prev.count += 1;
+        weekMap.set(key, prev);
+      }
+      return Array.from(weekMap.values()).map((r) => ({
+        label: r.label,
+        wind: r.count ? r.windSum / r.count : 0,
+        p50: r.p50Sum,
+        p75: r.p75Sum,
+        p90: r.p90Sum,
+      }));
     }
 
     const monthMap = new Map<string, { label: string; windSum: number; p50Sum: number; p75Sum: number; p90Sum: number; count: number }>();
@@ -1021,20 +1047,35 @@ export default function SiteDetail({ site }: { site: Site }) {
               </select>
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-slate-500">적용 구간</span>
-              <select value={simRange} onChange={(e) => setSimRange(e.target.value as "3M" | "6M" | "12M")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
-                <option value="3M">최근 3개월</option>
-                <option value="6M">최근 6개월</option>
-                <option value="12M">최근 12개월</option>
-              </select>
+              <span className="text-xs text-slate-500">적용 시작일</span>
+              <input type="date" value={simStartDate} onChange={(e) => setSimStartDate(e.target.value)} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800" />
             </label>
-            <div className="space-y-1">
-              <span className="text-xs text-slate-500">표시 기준</span>
-              <div className="seg">
-                {(["1W", "1M", "1Y"] as const).map((p) => (
-                  <span key={p} className={simPeriod === p ? "on" : ""} onClick={() => setSimPeriod(p)}>{p}</span>
-                ))}
-              </div>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">적용 종료일</span>
+              <input type="date" value={simEndDate} onChange={(e) => setSimEndDate(e.target.value)} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800" />
+            </label>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-xs text-slate-500">표시 기준</span>
+            <div className="seg">
+              {([
+                { key: "daily", label: "일별" },
+                { key: "weekly", label: "주별" },
+                { key: "monthly", label: "월별" },
+              ] as const).map((p) => (
+                <span key={p.key} className={simPeriod === p.key ? "on" : ""} onClick={() => setSimPeriod(p.key)}>{p.label}</span>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3">
+            <div className="text-xs font-semibold text-slate-700 mb-2">연식 구간별 기본 손실률</div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              <div className={`rounded p-2 border ${turbineAgeBand === "0-5" ? "border-blue-300 bg-blue-50" : "border-[#d6e8ff] bg-white"}`}><div className="text-slate-500">0~5년</div><div className="font-semibold text-slate-900">12%</div></div>
+              <div className={`rounded p-2 border ${turbineAgeBand === "6-10" ? "border-blue-300 bg-blue-50" : "border-[#d6e8ff] bg-white"}`}><div className="text-slate-500">6~10년</div><div className="font-semibold text-slate-900">15%</div></div>
+              <div className={`rounded p-2 border ${turbineAgeBand === "11-15" ? "border-blue-300 bg-blue-50" : "border-[#d6e8ff] bg-white"}`}><div className="text-slate-500">11~15년</div><div className="font-semibold text-slate-900">18%</div></div>
+              <div className={`rounded p-2 border ${turbineAgeBand === "16+" ? "border-blue-300 bg-blue-50" : "border-[#d6e8ff] bg-white"}`}><div className="text-slate-500">16년 이상</div><div className="font-semibold text-slate-900">22%</div></div>
             </div>
           </div>
 
