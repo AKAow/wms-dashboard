@@ -443,6 +443,16 @@ export default function SiteDetail({ site }: { site: Site }) {
     });
   }, [monthRows]);
 
+  const sensorWindUiRows = useMemo(() => {
+    return sensorWindRows.map((row) => {
+      let state: "ok" | "warn" | "err" = "ok";
+      const v = row.latest ?? row.avg ?? 0;
+      if (v >= 12) state = "warn";
+      if (v >= 18) state = "err";
+      return { ...row, state };
+    });
+  }, [sensorWindRows]);
+
   return (
     <div className="space-y-6 sitekit">
       <div className="topbar">
@@ -543,12 +553,22 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <div className="p-sub">Average and latest per channel</div>
                 </div>
               </div>
-              <div className="space-y-2">
-                {sensorWindRows.map((row) => (
-                  <div key={row.ch} className="rounded-lg border border-[#d6e8ff] bg-white/70 px-3 py-2">
-                    <div className="flex items-center justify-between text-xs"><span className="text-blue-500 font-mono">{row.ch}</span><span className="text-slate-500">{row.label}</span></div>
-                    <div className="mt-1 flex items-center justify-between text-sm"><span className="text-slate-700">Avg</span><span className="font-semibold text-slate-900">{toFixedOrDash(row.avg, 2)} m/s</span></div>
-                    <div className="mt-0.5 flex items-center justify-between text-sm"><span className="text-slate-700">Latest</span><span className="font-medium text-slate-800">{toFixedOrDash(row.latest, 2)} m/s</span></div>
+              <div className="t-head">
+                <div />
+                <div>Sensor</div>
+                <div className="right">Avg</div>
+                <div className="right">Latest</div>
+              </div>
+              <div>
+                {sensorWindUiRows.map((row) => (
+                  <div key={row.ch} className="t-row">
+                    <div className={`t-dot ${row.state}`} />
+                    <div>
+                      <div className="t-name">{row.label}</div>
+                      <div className="t-site">{row.ch.toUpperCase()}</div>
+                    </div>
+                    <div className="t-num">{toFixedOrDash(row.avg, 2)}</div>
+                    <div className="t-num">{toFixedOrDash(row.latest, 2)}</div>
                   </div>
                 ))}
               </div>

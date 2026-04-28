@@ -99,6 +99,18 @@ body {
 .sitekit .panel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
 .sitekit .p-title { font-weight:600; font-size:16px; color:#0a2540; letter-spacing:-0.01em; }
 .sitekit .p-sub { font-size:12px; color:#64748b; margin-top:2px; }
+.sitekit .t-head { display:grid; grid-template-columns:16px 1fr 88px 88px; gap:12px; padding:0 6px 8px; font-size:11px; font-weight:500; letter-spacing:0.04em; text-transform:uppercase; color:#94a3b8; }
+.sitekit .t-head .right { text-align:right; }
+.sitekit .t-row { display:grid; grid-template-columns:16px 1fr 88px 88px; align-items:center; gap:12px; padding:11px 6px; border-bottom:1px solid #e5f0ff; cursor:pointer; transition:background 140ms; border-radius:8px; }
+.sitekit .t-row:hover { background:rgba(255,255,255,0.5); }
+.sitekit .t-row:last-child { border-bottom:none; }
+.sitekit .t-dot { width:8px; height:8px; border-radius:999px; }
+.sitekit .t-dot.ok { background:#1bb673; box-shadow:0 0 0 3px rgba(27,182,115,0.18); }
+.sitekit .t-dot.warn { background:#e8a13c; box-shadow:0 0 0 3px rgba(232,161,60,0.18); }
+.sitekit .t-dot.err { background:#e15b5b; box-shadow:0 0 0 3px rgba(225,91,91,0.18); }
+.sitekit .t-name { font-weight:600; color:#0a2540; font-size:13.5px; }
+.sitekit .t-site { font-size:11px; color:#64748b; margin-top:1px; }
+.sitekit .t-num { font-variant-numeric:tabular-nums; font-size:13px; color:#0a2540; font-weight:500; text-align:right; }
 
 @media (max-width: 1200px) {
   .sitekit .kpi-row { grid-template-columns: repeat(2, 1fr); }
