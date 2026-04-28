@@ -92,7 +92,7 @@ const toFixedOrDash = (value: number | null | undefined, digits = 2) =>
 const toUTCDateOnly = (timestamp: string) => timestamp.slice(0, 10);
 
 function MiniSparkline({ points, color = "#2f80ed" }: { points: number[]; color?: string }) {
-  if (!points.length) return <div className="h-7" />;
+  if (!points.length) return <div className="h-7 w-[92px]" />;
   const max = Math.max(...points);
   const min = Math.min(...points);
   const w = 100;
@@ -105,8 +105,8 @@ function MiniSparkline({ points, color = "#2f80ed" }: { points: number[]; color?
     })
     .join(" ");
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="h-7 w-full opacity-90">
-      <path d={d} fill="none" stroke={color} strokeWidth="1.7" />
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet" className="h-7 w-[92px] opacity-90 shrink-0">
+      <path d={d} fill="none" stroke={color} strokeWidth="1.6" />
     </svg>
   );
 }
@@ -458,24 +458,24 @@ export default function SiteDetail({ site }: { site: Site }) {
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             <div className="rounded-2xl border border-[#d6e8ff] bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_24px_rgba(10,37,64,0.06)]">
-              <p className="text-[11px] text-slate-500 uppercase">🌬 평균 풍속 ({selectedMonth})</p>
+              <p className="text-[11px] text-slate-500 uppercase">Wind · avg ({selectedMonth})</p>
               <p className="text-4xl font-semibold text-slate-900 mt-2 leading-none">{toFixedOrDash(monthAvgWind, 2)}<span className="text-sm text-slate-500 ml-1">m/s</span></p>
-              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">▲ stable</span><MiniSparkline points={sparkWind} color="#2f80ed" /></div>
+              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">▲ 0.0%</span><MiniSparkline points={sparkWind} color="#2f80ed" /></div>
             </div>
             <div className="rounded-2xl border border-[#d6e8ff] bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_24px_rgba(10,37,64,0.06)]">
-              <p className="text-[11px] text-slate-500 uppercase">📊 데이터 커버리지</p>
+              <p className="text-[11px] text-slate-500 uppercase">Data coverage</p>
               <p className="text-4xl font-semibold text-slate-900 mt-2 leading-none">{monthCoverage}<span className="text-sm text-slate-500 ml-1">%</span></p>
-              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">● monthly</span><MiniSparkline points={sparkCoverage} color="#10b981" /></div>
+              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">▲ monthly</span><MiniSparkline points={sparkCoverage} color="#10b981" /></div>
             </div>
             <div className="rounded-2xl border border-[#d6e8ff] bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_24px_rgba(10,37,64,0.06)]">
-              <p className="text-[11px] text-slate-500 uppercase">🔄 최근 동기화일</p>
+              <p className="text-[11px] text-slate-500 uppercase">Latest sync</p>
               <p className="text-3xl font-semibold text-slate-900 mt-2 leading-none">{latestDataDate}</p>
-              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">▲ up</span><MiniSparkline points={sparkSync} color="#8b5cf6" /></div>
+              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">▲ synced</span><MiniSparkline points={sparkSync} color="#8b5cf6" /></div>
             </div>
             <div className="rounded-2xl border border-[#d6e8ff] bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_24px_rgba(10,37,64,0.06)]">
-              <p className="text-[11px] text-slate-500 uppercase">🚨 품질 알림 추세</p>
+              <p className="text-[11px] text-slate-500 uppercase">Quality trend</p>
               <p className="text-4xl font-semibold text-slate-900 mt-2 leading-none">{new Set(monthRows.filter((r) => r.channel === "ch1").map((r) => r.date)).size}<span className="text-sm text-slate-500 ml-1">days</span></p>
-              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-50 text-rose-700">▼ alert</span><MiniSparkline points={sparkFail} color="#ef4444" /></div>
+              <div className="mt-2 flex items-center gap-2"><span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-50 text-rose-700">▼ risk</span><MiniSparkline points={sparkFail} color="#ef4444" /></div>
             </div>
           </div>
 
