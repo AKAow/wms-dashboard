@@ -503,10 +503,13 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr] gap-4">
-            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />센서별 풍속 Output</h3>
+          <div className="grid">
+            <div className="panel">
+              <div className="panel-head">
+                <div>
+                  <div className="p-title">Output trend</div>
+                  <div className="p-sub">Sensor wind speed by period</div>
+                </div>
                 <div className="seg">
                   {[7, 14, 30].map((p) => (
                     <span key={p} className={overviewPeriod === p ? "on" : ""} onClick={() => setOverviewPeriod(p as 7 | 14 | 30)}>{p}D</span>
@@ -533,8 +536,13 @@ export default function SiteDetail({ site }: { site: Site }) {
               )}
             </div>
 
-            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-4">
-              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400" />센서별 풍속</h3>
+            <div className="panel">
+              <div className="panel-head">
+                <div>
+                  <div className="p-title">Sensor wind</div>
+                  <div className="p-sub">Average and latest per channel</div>
+                </div>
+              </div>
               <div className="space-y-2">
                 {sensorWindRows.map((row) => (
                   <div key={row.ch} className="rounded-lg border border-[#d6e8ff] bg-white/70 px-3 py-2">
@@ -547,9 +555,14 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_1fr] gap-4">
-            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-3">
-              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />계측기 위치 지도</h3>
+          <div className="grid">
+            <div className="panel">
+              <div className="panel-head">
+                <div>
+                  <div className="p-title">Site map</div>
+                  <div className="p-sub">Measurement mast location</div>
+                </div>
+              </div>
               {!mapEmbedUrl ? (
                 <div className="text-sm text-slate-500">위도/경도 정보가 없어 지도를 표시할 수 없습니다</div>
               ) : (
@@ -569,8 +582,13 @@ export default function SiteDetail({ site }: { site: Site }) {
               )}
             </div>
 
-            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-4">
-              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-400" />사이트 정보</h3>
+            <div className="panel">
+              <div className="panel-head">
+                <div>
+                  <div className="p-title">Site info</div>
+                  <div className="p-sub">Location and device profile</div>
+                </div>
+              </div>
               <div className="space-y-3 text-sm">
                 {[["사이트 번호", site.site_number], ["위치명", site.location_name ?? "-"], ["위도", site.latitude != null ? `${toFixedOrDash(site.latitude, 6)}° N` : "-"], ["경도", site.longitude != null ? `${toFixedOrDash(site.longitude, 6)}° E` : "-"], ["고도", site.elevation != null ? `${toFixedOrDash(site.elevation, 1)} m` : "-"], ["iPack", site.ipack_email ?? "-"]].map(([l, v]) => (
                   <div key={l} className="flex justify-between gap-4"><span className="text-slate-500">{l}</span><span className="text-slate-800 font-mono text-xs text-right">{v}</span></div>
