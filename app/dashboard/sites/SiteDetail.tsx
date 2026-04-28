@@ -113,7 +113,7 @@ function MiniSparkline({ points, color = "#2f80ed" }: { points: number[]; color?
 
 export default function SiteDetail({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
-  const [overviewPeriod, setOverviewPeriod] = useState<7 | 14 | 30>(14);
+  const [overviewPeriod, setOverviewPeriod] = useState<"1W" | "1M" | "1Y">("1M");
   const [selectedDate, setSelectedDate] = useState(formatKSTDate());
   const [selectedMonth, setSelectedMonth] = useState(formatKSTMonth());
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -471,8 +471,63 @@ export default function SiteDetail({ site }: { site: Site }) {
   }, [monthRows]);
 
   const estimateRowsForPeriod = useMemo(() => {
-    return estimateDailyRows.slice(-overviewPeriod);
-  }, [estimateDailyRows, overviewPeriod]);
+    if (overviewPeriod === "1W") {
+      return estimateDailyRows.slice(-7);
+    }
+
+    if (overviewPeriod === "1M") {
+      const weekMap = new Map<string, { date: string; windSum: number; p50Sum: number; p75Sum: number; p90Sum: number; count: number; qualityScore: number }>();
+      for (const row of estimateDailyRows) {
+        const [mm, dd] = row.date.split("-").map(Number);
+        const w = Math.ceil(dd / 7);
+        const key = `${mm}월 ${w}주`;
+        const prev = weekMap.get(key) ?? { date: key, windSum: 0, p50Sum: 0, p75Sum: 0, p90Sum: 0, count: 0, qualityScore: 0 };
+        prev.windSum += row.wind;
+        prev.p50Sum += row.p50;
+        prev.p75Sum += row.p75;
+        prev.p90Sum += row.p90;
+        prev.count += 1;
+        prev.qualityScore += row.quality === "정상" ? 2 : row.quality === "주의" ? 1 : 0;
+        weekMap.set(key, prev);
+      }
+      return Array.from(weekMap.values()).map((r) => ({
+        date: r.date,
+        wind: r.count ? r.windSum / r.count : 0,
+        p50: r.p50Sum,
+        p75: r.p75Sum,
+        p90: r.p90Sum,
+        quality: r.qualityScore >= r.count * 1.5 ? "정상" : r.qualityScore >= r.count ? "주의" : "낮음",
+      }));
+    }
+
+    const monthMap = new Map<string, { date: string; windSum: number; p50Sum: number; p75Sum: number; p90Sum: number; count: number; qualityScore: number }>();
+    for (const row of dailyStats.filter((r) => r.channel === "ch1" && typeof r.avg_value === "number")) {
+      const key = row.date.slice(0, 7);
+      const v = row.avg_value as number;
+      const ratedPowerMw = 4.2;
+      const grossCf = Math.min(Math.max((v - 3) / 9, 0), 1) ** 3;
+      const netCf = Math.min(grossCf * 0.9, 0.62);
+      const p50 = ratedPowerMw * 24 * netCf * (1 - 0.17);
+      const p75 = p50 * 0.92;
+      const p90 = p50 * 0.84;
+      const prev = monthMap.get(key) ?? { date: key, windSum: 0, p50Sum: 0, p75Sum: 0, p90Sum: 0, count: 0, qualityScore: 0 };
+      prev.windSum += v;
+      prev.p50Sum += p50;
+      prev.p75Sum += p75;
+      prev.p90Sum += p90;
+      prev.count += 1;
+      prev.qualityScore += row.data_count >= 100 ? 2 : row.data_count >= 50 ? 1 : 0;
+      monthMap.set(key, prev);
+    }
+    return Array.from(monthMap.values()).map((r) => ({
+      date: r.date,
+      wind: r.count ? r.windSum / r.count : 0,
+      p50: r.p50Sum,
+      p75: r.p75Sum,
+      p90: r.p90Sum,
+      quality: r.qualityScore >= r.count * 1.5 ? "정상" : r.qualityScore >= r.count ? "주의" : "낮음",
+    }));
+  }, [estimateDailyRows, overviewPeriod, dailyStats]);
 
   return (
     <div className="space-y-6 sitekit">
@@ -542,8 +597,8 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <div className="p-sub">기간별 센서 풍속 추세</div>
                 </div>
                 <div className="seg">
-                  {[7, 14, 30].map((p) => (
-                    <span key={p} className={overviewPeriod === p ? "on" : ""} onClick={() => setOverviewPeriod(p as 7 | 14 | 30)}>{p}D</span>
+                  {(["1W", "1M", "1Y"] as const).map((p) => (
+                    <span key={p} className={overviewPeriod === p ? "on" : ""} onClick={() => setOverviewPeriod(p)}>{p}</span>
                   ))}
                 </div>
               </div>
