@@ -46,6 +46,13 @@ const CHART_COLORS: Record<string, string> = {
   ch22: "#ef4444",
 };
 
+const AGE_LOSS_MAP: Record<"0-5" | "6-10" | "11-15" | "16+", number> = {
+  "0-5": 0.12,
+  "6-10": 0.15,
+  "11-15": 0.18,
+  "16+": 0.22,
+};
+
 const getKSTParts = (date = new Date()) => {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
@@ -115,6 +122,9 @@ export default function SiteDetail({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
   const [outputPeriod, setOutputPeriod] = useState<"1W" | "1M" | "1Y">("1M");
   const [overviewPeriod, setOverviewPeriod] = useState<"1W" | "1M" | "1Y">("1M");
+  const [simPeriod, setSimPeriod] = useState<"1W" | "1M" | "1Y">("1M");
+  const [simRange, setSimRange] = useState<"3M" | "6M" | "12M">("6M");
+  const [turbineAgeBand, setTurbineAgeBand] = useState<"0-5" | "6-10" | "11-15" | "16+">("6-10");
   const [selectedDate, setSelectedDate] = useState(formatKSTDate());
   const [selectedMonth, setSelectedMonth] = useState(formatKSTMonth());
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -532,6 +542,65 @@ export default function SiteDetail({ site }: { site: Site }) {
     }));
   }, [estimateDailyRows, overviewPeriod, dailyStats]);
 
+  const simulationDailyRows = useMemo(() => {
+    const months = simRange === "3M" ? 3 : simRange === "6M" ? 6 : 12;
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - months);
+
+    const baseRows = dailyStats
+      .filter((r) => r.channel === "ch1" && typeof r.avg_value === "number")
+      .filter((r) => new Date(`${r.date}T00:00:00`) >= cutoff)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const loss = AGE_LOSS_MAP[turbineAgeBand];
+    const ratedPowerMw = 4.2;
+
+    return baseRows.map((r) => {
+      const v = r.avg_value as number;
+      const grossCf = Math.min(Math.max((v - 3) / 9, 0), 1) ** 3;
+      const netCf = Math.min(grossCf * 0.9, 0.62);
+      const p50 = ratedPowerMw * 24 * netCf * (1 - loss);
+      const p75 = p50 * 0.92;
+      const p90 = p50 * 0.84;
+      return { date: r.date, wind: v, p50, p75, p90 };
+    });
+  }, [dailyStats, simRange, turbineAgeBand]);
+
+  const simulationRows = useMemo(() => {
+    if (simPeriod === "1W") {
+      return simulationDailyRows.slice(-7).map((r) => ({ ...r, label: r.date.slice(5) }));
+    }
+    if (simPeriod === "1M") {
+      return simulationDailyRows.map((r) => ({ ...r, label: r.date.slice(5) }));
+    }
+
+    const monthMap = new Map<string, { label: string; windSum: number; p50Sum: number; p75Sum: number; p90Sum: number; count: number }>();
+    for (const r of simulationDailyRows) {
+      const key = r.date.slice(0, 7);
+      const prev = monthMap.get(key) ?? { label: key, windSum: 0, p50Sum: 0, p75Sum: 0, p90Sum: 0, count: 0 };
+      prev.windSum += r.wind;
+      prev.p50Sum += r.p50;
+      prev.p75Sum += r.p75;
+      prev.p90Sum += r.p90;
+      prev.count += 1;
+      monthMap.set(key, prev);
+    }
+    return Array.from(monthMap.values()).map((r) => ({
+      label: r.label,
+      wind: r.count ? r.windSum / r.count : 0,
+      p50: r.p50Sum,
+      p75: r.p75Sum,
+      p90: r.p90Sum,
+    }));
+  }, [simulationDailyRows, simPeriod]);
+
+  const simulationSummary = useMemo(() => {
+    const p50 = simulationRows.reduce((a, b) => a + b.p50, 0);
+    const p75 = simulationRows.reduce((a, b) => a + b.p75, 0);
+    const p90 = simulationRows.reduce((a, b) => a + b.p90, 0);
+    return { p50, p75, p90, loss: AGE_LOSS_MAP[turbineAgeBand] };
+  }, [simulationRows, turbineAgeBand]);
+
   return (
     <div className="space-y-6 sitekit">
       <div className="topbar">
@@ -549,7 +618,6 @@ export default function SiteDetail({ site }: { site: Site }) {
           <div className="sub">{site.location_name ?? "위치 미입력"} · 최근 동기화 {latestDataDate}</div>
         </div>
         <div className="actions">
-          <button onClick={() => setTab("monthly")} className="btn btn-secondary">월간 통계</button>
           <button onClick={downloadMonthlyExcel} className="btn btn-primary"><Download size={15} />Export report</button>
         </div>
       </div>
@@ -940,12 +1008,82 @@ export default function SiteDetail({ site }: { site: Site }) {
       {tab === "simulation" && (
         <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-4">
           <h3 className="text-sm font-semibold text-slate-900">사업성 시뮬레이션</h3>
-          <p className="text-xs text-slate-600">터빈 연식 기반 손실률 기본값을 적용한 제한형 시나리오입니다.</p>
+          <p className="text-xs text-slate-600">연식 기반 손실률과 적용 구간을 선택해 P50/P75/P90 추정치를 계산합니다.</p>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">보수 시나리오</div><div className="text-slate-900 font-semibold mt-1">손실률 22%</div></div>
-            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">기준 시나리오</div><div className="text-slate-900 font-semibold mt-1">손실률 17%</div></div>
-            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">공격 시나리오</div><div className="text-slate-900 font-semibold mt-1">손실률 12%</div></div>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">터빈 연식 구간</span>
+              <select value={turbineAgeBand} onChange={(e) => setTurbineAgeBand(e.target.value as "0-5" | "6-10" | "11-15" | "16+")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
+                <option value="0-5">0~5년</option>
+                <option value="6-10">6~10년</option>
+                <option value="11-15">11~15년</option>
+                <option value="16+">16년 이상</option>
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">적용 구간</span>
+              <select value={simRange} onChange={(e) => setSimRange(e.target.value as "3M" | "6M" | "12M")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
+                <option value="3M">최근 3개월</option>
+                <option value="6M">최근 6개월</option>
+                <option value="12M">최근 12개월</option>
+              </select>
+            </label>
+            <div className="space-y-1">
+              <span className="text-xs text-slate-500">표시 기준</span>
+              <div className="seg">
+                {(["1W", "1M", "1Y"] as const).map((p) => (
+                  <span key={p} className={simPeriod === p ? "on" : ""} onClick={() => setSimPeriod(p)}>{p}</span>
+                ))}
+              </div>
+            </div>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">누적 P50</div><div className="text-slate-900 font-semibold mt-1">{toFixedOrDash(simulationSummary.p50, 1)} MWh</div></div>
+            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">누적 P75</div><div className="text-slate-900 font-semibold mt-1">{toFixedOrDash(simulationSummary.p75, 1)} MWh</div></div>
+            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">누적 P90</div><div className="text-slate-900 font-semibold mt-1">{toFixedOrDash(simulationSummary.p90, 1)} MWh</div></div>
+          </div>
+
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={simulationRows}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} />
+              <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" MWh" />
+              <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
+              <Legend wrapperStyle={{ fontSize: "12px" }} />
+              <Line type="monotone" dataKey="p50" name="P50" stroke="#2f80ed" dot={false} strokeWidth={2.2} />
+              <Line type="monotone" dataKey="p75" name="P75" stroke="#10b981" dot={false} strokeWidth={1.8} />
+              <Line type="monotone" dataKey="p90" name="P90" stroke="#f59e0b" dot={false} strokeWidth={1.8} />
+            </LineChart>
+          </ResponsiveContainer>
+
+          <div className="h-[220px] overflow-auto border border-[#d6e8ff] rounded-lg">
+            <table className="w-full min-w-[700px] text-xs">
+              <thead>
+                <tr className="border-b border-[#d6e8ff] text-slate-500">
+                  <th className="text-left px-2 py-2">구간</th>
+                  <th className="text-right px-2 py-2">평균풍속</th>
+                  <th className="text-right px-2 py-2">P50</th>
+                  <th className="text-right px-2 py-2">P75</th>
+                  <th className="text-right px-2 py-2">P90</th>
+                  <th className="text-right px-2 py-2">적용손실</th>
+                </tr>
+              </thead>
+              <tbody>
+                {simulationRows.map((r) => (
+                  <tr key={r.label} className="border-b border-[#e6f0ff] text-slate-700">
+                    <td className="px-2 py-2">{r.label}</td>
+                    <td className="px-2 py-2 text-right">{toFixedOrDash(r.wind, 2)} m/s</td>
+                    <td className="px-2 py-2 text-right">{toFixedOrDash(r.p50, 1)}</td>
+                    <td className="px-2 py-2 text-right">{toFixedOrDash(r.p75, 1)}</td>
+                    <td className="px-2 py-2 text-right">{toFixedOrDash(r.p90, 1)}</td>
+                    <td className="px-2 py-2 text-right">{Math.round(simulationSummary.loss * 100)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
           <p className="text-[11px] text-amber-700">※ 시뮬레이션 값은 사업성 검토 참고용이며 발전량 보증값이 아닙니다.</p>
         </div>
       )}
