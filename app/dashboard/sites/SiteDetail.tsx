@@ -603,9 +603,9 @@ export default function SiteDetail({ site }: { site: Site }) {
       return Array.from(weekMap.values()).map((r) => ({
         label: r.label,
         wind: r.count ? r.windSum / r.count : 0,
-        p50: r.p50Sum,
-        p75: r.p75Sum,
-        p90: r.p90Sum,
+        p50: r.count ? r.p50Sum / r.count : 0,
+        p75: r.count ? r.p75Sum / r.count : 0,
+        p90: r.count ? r.p90Sum / r.count : 0,
       }));
     }
 
@@ -623,9 +623,9 @@ export default function SiteDetail({ site }: { site: Site }) {
     return Array.from(monthMap.values()).map((r) => ({
       label: r.label,
       wind: r.count ? r.windSum / r.count : 0,
-      p50: r.p50Sum,
-      p75: r.p75Sum,
-      p90: r.p90Sum,
+      p50: r.count ? r.p50Sum / r.count : 0,
+      p75: r.count ? r.p75Sum / r.count : 0,
+      p90: r.count ? r.p90Sum / r.count : 0,
     }));
   }, [simulationDailyRows, simPeriod]);
 
