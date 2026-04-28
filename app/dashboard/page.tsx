@@ -6,10 +6,11 @@ import {
   Activity,
   AlertTriangle,
   Bell,
-  Database,
+  CalendarDays,
+  Download,
+  Gauge,
   MapPin,
   Search,
-  ShieldCheck,
   Upload,
 } from "lucide-react";
 import Link from "next/link";
@@ -50,6 +51,12 @@ export default function DashboardPage() {
   }, [loadSites, loadUploads]);
 
   const activeSites = sites.filter((s) => s.is_active).length;
+  const selectedSite = useMemo(() => {
+    if (!sites.length) return null;
+    const q = query.trim().toLowerCase();
+    if (!q) return sites[0];
+    return sites.find((s) => [s.name, s.site_number, s.location_name ?? ""].join(" ").toLowerCase().includes(q)) ?? sites[0];
+  }, [sites, query]);
 
   const failed30d = useMemo(() => {
     const threshold = new Date();
@@ -57,10 +64,15 @@ export default function DashboardPage() {
     return uploads.filter((u) => u.status === "failed" && new Date(u.created_at) >= threshold).length;
   }, [uploads]);
 
-  const recent7d = useMemo(() => {
+  const latestSync = uploads[0]?.created_at ?? null;
+
+  const coverage30d = useMemo(() => {
     const threshold = new Date();
-    threshold.setDate(threshold.getDate() - 7);
-    return uploads.filter((u) => new Date(u.created_at) >= threshold).length;
+    threshold.setDate(threshold.getDate() - 30);
+    const target = uploads.filter((u) => new Date(u.created_at) >= threshold);
+    if (!target.length) return 0;
+    const ok = target.filter((u) => u.status === "success").length;
+    return Math.round((ok / target.length) * 100);
   }, [uploads]);
 
   const chartData = useMemo(() => {
@@ -74,6 +86,7 @@ export default function DashboardPage() {
 
     const map = new Map(days.map((d) => [d.key, d]));
     for (const u of uploads) {
+      if (selectedSite && u.site_id !== selectedSite.id) continue;
       const d = new Date(u.created_at);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const row = map.get(key);
@@ -83,47 +96,30 @@ export default function DashboardPage() {
     }
 
     return days;
-  }, [uploads]);
+  }, [uploads, selectedSite]);
 
-  const filteredSites = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return sites;
-    return sites.filter((s) =>
-      [s.name, s.site_number, s.location_name ?? ""].join(" ").toLowerCase().includes(q),
-    );
-  }, [sites, query]);
-
-  const siteLastUpload = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const u of uploads) {
-      if (!u.site_id) continue;
-      if (!map.has(u.site_id)) map.set(u.site_id, u.created_at);
-    }
-    return map;
-  }, [uploads]);
-
-  const alerts = useMemo(() => {
+  const siteAlerts = useMemo(() => {
     return uploads
-      .filter((u) => u.status === "failed")
-      .slice(0, 6)
+      .filter((u) => u.status === "failed" && (!selectedSite || u.site_id === selectedSite.id))
+      .slice(0, 5)
       .map((u) => ({
         id: u.id,
         title: u.file_name ?? "파일명 없음",
         time: new Date(u.created_at).toLocaleString("ko"),
         meta: u.error_message ?? "처리 중 오류가 발생했습니다.",
       }));
-  }, [uploads]);
+  }, [uploads, selectedSite]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <div className="text-sm text-slate-500">Overview · WMS Fleet</div>
+        <div className="text-sm text-slate-500">Customer Dashboard · WMS</div>
         <div className="ml-auto relative w-72 max-w-[60vw]">
           <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="사이트/번호/위치 검색"
+            placeholder="사이트/번호 검색"
             className="w-full rounded-xl border border-[#d6e8ff] bg-white/80 pl-9 pr-3 py-2 text-sm text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
           />
         </div>
@@ -134,34 +130,31 @@ export default function DashboardPage() {
 
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">WMS 운영 대시보드</h1>
-          <p className="text-sm text-slate-600 mt-1">사이트 운영 상태, 업로드 흐름, 실패 알림을 한 화면에서 확인합니다.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">{selectedSite?.name ?? "WMS 고객 대시보드"}</h1>
+          <p className="text-sm text-slate-600 mt-1">평균 풍속, 동기화 상태, 일간·월간 데이터와 사이트 정보를 한 화면에서 확인합니다.</p>
         </div>
-        <Link href="/dashboard/data" className="rounded-xl bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-500">
-          데이터 이력 보기
-        </Link>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <div className={`${panelClass()} p-4`}>
-          <div className="text-xs uppercase tracking-wider text-slate-500">전체 사이트</div>
-          <div className="mt-2 flex items-end justify-between">
-            <p className="text-4xl font-semibold text-slate-900">{sites.length}</p>
-            <MapPin className="w-5 h-5 text-blue-500" />
-          </div>
-        </div>
-        <div className={`${panelClass()} p-4`}>
           <div className="text-xs uppercase tracking-wider text-slate-500">활성 사이트</div>
           <div className="mt-2 flex items-end justify-between">
             <p className="text-4xl font-semibold text-slate-900">{activeSites}</p>
-            <ShieldCheck className="w-5 h-5 text-emerald-500" />
+            <Activity className="w-5 h-5 text-emerald-500" />
           </div>
         </div>
         <div className={`${panelClass()} p-4`}>
-          <div className="text-xs uppercase tracking-wider text-slate-500">최근 7일 업로드</div>
-          <div className="mt-2 flex items-end justify-between">
-            <p className="text-4xl font-semibold text-slate-900">{recent7d}</p>
+          <div className="text-xs uppercase tracking-wider text-slate-500">최근 동기화</div>
+          <div className="mt-2 flex items-end justify-between gap-2">
+            <p className="text-sm font-semibold text-slate-900">{latestSync ? new Date(latestSync).toLocaleString("ko") : "없음"}</p>
             <Upload className="w-5 h-5 text-sky-500" />
+          </div>
+        </div>
+        <div className={`${panelClass()} p-4`}>
+          <div className="text-xs uppercase tracking-wider text-slate-500">데이터 커버리지(30일)</div>
+          <div className="mt-2 flex items-end justify-between">
+            <p className="text-4xl font-semibold text-slate-900">{coverage30d}%</p>
+            <Gauge className="w-5 h-5 text-blue-500" />
           </div>
         </div>
         <div className={`${panelClass()} p-4`}>
@@ -177,10 +170,10 @@ export default function DashboardPage() {
         <div className={`${panelClass()} p-4`}>
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">업로드 추이 (14일)</h2>
-              <p className="text-xs text-slate-500">총 업로드 대비 성공 처리 건수</p>
+              <h2 className="text-sm font-semibold text-slate-900">일간 동기화 추이 (14일)</h2>
+              <p className="text-xs text-slate-500">사이트 기준 전체/성공 건수</p>
             </div>
-            <Database className="w-4 h-4 text-blue-500" />
+            <CalendarDays className="w-4 h-4 text-blue-500" />
           </div>
           <div className="h-64 overflow-x-auto">
             <LineChart width={900} height={250} data={chartData}>
@@ -202,74 +195,46 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className={`${panelClass()} p-4`}>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-slate-900">실패 알림 피드</h2>
-            <span className="text-xs text-slate-500">최근 {alerts.length}건</span>
-          </div>
-          <div className="space-y-2 max-h-64 overflow-auto pr-1">
-            {alerts.length === 0 ? (
-              <p className="text-sm text-slate-500 py-6 text-center">최근 실패 알림이 없습니다.</p>
-            ) : (
-              alerts.map((a) => (
-                <div key={a.id} className="rounded-xl border border-[#d6e8ff] bg-white/70 p-3">
-                  <p className="text-sm font-medium text-slate-900 truncate">{a.title}</p>
-                  <p className="text-xs text-slate-600 mt-1">{a.meta}</p>
-                  <p className="text-[11px] text-slate-500 mt-2">{a.time}</p>
-                </div>
-              ))
-            )}
-          </div>
+        <div className={`${panelClass()} p-4 space-y-3`}>
+          <h2 className="text-sm font-semibold text-slate-900">사이트 정보</h2>
+          {selectedSite ? (
+            <>
+              <div className="rounded-xl border border-[#d6e8ff] bg-white/70 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-slate-900 font-medium"><MapPin className="w-4 h-4 text-blue-500" />{selectedSite.name}</div>
+                <div className="text-xs text-slate-600">번호: {selectedSite.site_number}</div>
+                <div className="text-xs text-slate-600">위치: {selectedSite.location_name ?? "-"}</div>
+                <div className="text-xs text-slate-600">고도: {selectedSite.elevation ? `${selectedSite.elevation}m` : "-"}</div>
+                <div className="text-xs text-slate-600">좌표: {selectedSite.latitude && selectedSite.longitude ? `${selectedSite.latitude.toFixed(4)}, ${selectedSite.longitude.toFixed(4)}` : "-"}</div>
+                <div className="text-xs text-slate-600">상태: {selectedSite.is_active ? "활성" : "비활성"}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Link href={`/dashboard/sites?id=${encodeURIComponent(selectedSite.id)}`} className="rounded-xl border border-[#d6e8ff] bg-white/80 px-3 py-2 text-xs text-slate-700 hover:bg-blue-50 text-center">일간/월간 데이터 보기</Link>
+                <Link href={`/dashboard/sites?id=${encodeURIComponent(selectedSite.id)}`} className="rounded-xl bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-500 text-center inline-flex items-center justify-center gap-1"><Download className="w-3 h-3" />데이터 다운로드</Link>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">사이트 정보가 없습니다.</p>
+          )}
         </div>
       </div>
 
       <div className={`${panelClass()} p-4`}>
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-slate-900">사이트 운영 목록</h2>
-          <Link href="/dashboard/sites" className="text-xs text-blue-600 hover:underline">전체 관리</Link>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-slate-900">최근 알림 피드</h2>
+          <span className="text-xs text-slate-500">최근 {siteAlerts.length}건</span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px]">
-            <thead>
-              <tr className="border-b border-[#d6e8ff]">
-                <th className="px-3 py-2 text-left text-xs text-slate-500 uppercase">상태</th>
-                <th className="px-3 py-2 text-left text-xs text-slate-500 uppercase">사이트</th>
-                <th className="px-3 py-2 text-left text-xs text-slate-500 uppercase">번호</th>
-                <th className="px-3 py-2 text-left text-xs text-slate-500 uppercase">위치</th>
-                <th className="px-3 py-2 text-left text-xs text-slate-500 uppercase">최근 동기화</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSites.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-sm text-slate-500">검색 결과가 없습니다.</td>
-                </tr>
-              ) : (
-                filteredSites.map((site) => (
-                  <tr key={site.id} className="border-b border-[#d6e8ff]/70 hover:bg-blue-50/50 transition-colors">
-                    <td className="px-3 py-2">
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium ${site.is_active ? "text-emerald-600" : "text-slate-500"}`}>
-                        <Activity className="w-3.5 h-3.5" />
-                        {site.is_active ? "활성" : "비활성"}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-sm font-medium text-slate-900">
-                      <Link href={`/dashboard/sites?id=${encodeURIComponent(site.id)}`} className="hover:text-blue-600">
-                        {site.name}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2 text-sm text-slate-700 font-mono">{site.site_number}</td>
-                    <td className="px-3 py-2 text-sm text-slate-600">{site.location_name ?? "-"}</td>
-                    <td className="px-3 py-2 text-sm text-slate-600">
-                      {siteLastUpload.get(site.id)
-                        ? new Date(siteLastUpload.get(site.id)!).toLocaleString("ko")
-                        : "업로드 이력 없음"}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <div className="space-y-2">
+          {siteAlerts.length === 0 ? (
+            <p className="text-sm text-slate-500 py-4 text-center">최근 실패 알림이 없습니다.</p>
+          ) : (
+            siteAlerts.map((a) => (
+              <div key={a.id} className="rounded-xl border border-[#d6e8ff] bg-white/70 p-3">
+                <p className="text-sm font-medium text-slate-900 truncate">{a.title}</p>
+                <p className="text-xs text-slate-600 mt-1">{a.meta}</p>
+                <p className="text-[11px] text-slate-500 mt-2">{a.time}</p>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
