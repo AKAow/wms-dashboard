@@ -83,7 +83,7 @@ export default function UsersPage() {
               <tr><td colSpan={3} className="px-4 py-8 text-center text-sm text-slate-500">권한 데이터가 없습니다</td></tr>
             ) : (
               accesses.map((a) => (
-                <tr key={a.id} className="hover:bg-slate-800/20 transition-colors">
+                <tr key={a.id} className="hover:bg-blue-50/60 transition-colors">
                   <td className="px-4 py-3 text-sm text-slate-900">{a.sites ? `${a.sites.name} (${a.sites.site_number})` : "-"}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${a.role === "admin" ? "bg-blue-400/10 text-blue-400" : "bg-purple-400/10 text-purple-400"}`}>

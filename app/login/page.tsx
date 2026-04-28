@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Wind, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   
@@ -47,10 +47,8 @@ export default function LoginPage() {
         {/* 헤더 */}
         <div className="flex flex-col items-center text-center mb-8">
           <div className="flex items-center gap-3 mb-3">
-            <div className="flex w-10 h-10 border rounded-xl items-center justify-center border-[#c8def8]/80 bg-white/80 shadow-lg shadow-blue-900/10">
-              <Wind className="w-5 h-5 text-blue-400" />
-            </div>
-            <span className="text-2xl font-bold tracking-tight text-slate-900">WindTree WMS</span>
+            <img src="/brand/logo-mark.png" alt="WindTree" className="w-10 h-10 rounded-xl" />
+            <img src="/brand/logo-horizontal.png" alt="WindTree WMS" className="h-7 w-auto object-contain" />
           </div>
           <p className="text-sm text-slate-500">기상 측정 데이터 통합 관리 플랫폼</p>
         </div>

@@ -103,7 +103,7 @@ export default function SettingsPage() {
               <span className="text-slate-500">동기화 주기</span>
               <div className="flex items-center gap-2">
                 <CalendarDays className="w-4 h-4 text-blue-400" />
-                <select value={syncDay} onChange={(e) => setSyncDay(e.target.value as (typeof DAYS)[number])} disabled={loadingCron} className="rounded-lg border border-[#c8def8] bg-white/70 px-3 py-1.5 text-sm text-slate-200 focus:border-blue-500 focus:outline-none disabled:opacity-60">
+                <select value={syncDay} onChange={(e) => setSyncDay(e.target.value as (typeof DAYS)[number])} disabled={loadingCron} className="rounded-lg border border-[#c8def8] bg-white/70 px-3 py-1.5 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:opacity-60">
                   {DAYS.map((day) => <option key={day} value={day}>{day} 06:00</option>)}
                 </select>
               </div>

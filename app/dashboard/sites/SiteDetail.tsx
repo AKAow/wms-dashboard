@@ -378,7 +378,7 @@ export default function SiteDetail({ site }: { site: Site }) {
           <div className="flex items-center gap-2 mb-1"><MapPin className="w-4 h-4 text-blue-400" /><h1 className="text-2xl font-bold text-slate-900">{site.name}</h1></div>
           <p className="text-sm text-slate-500">{site.site_number} · {site.location_name ?? "위치 미입력"}</p>
         </div>
-        <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full ${site.is_active ? "bg-green-400/10 text-green-400" : "bg-slate-700 text-slate-500"}`}>
+        <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full ${site.is_active ? "bg-green-400/10 text-green-500" : "bg-slate-200 text-slate-600"}`}>
           <Activity className="w-3 h-3" />{site.is_active ? "활성" : "비활성"}
         </span>
       </div>
@@ -399,7 +399,7 @@ export default function SiteDetail({ site }: { site: Site }) {
               <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-400" />사이트 정보</h3>
               <div className="space-y-3 text-sm">
                 {[["사이트 번호", site.site_number], ["위치명", site.location_name ?? "-"], ["위도", site.latitude != null ? `${toFixedOrDash(site.latitude, 6)}° N` : "-"], ["경도", site.longitude != null ? `${toFixedOrDash(site.longitude, 6)}° E` : "-"], ["고도", site.elevation != null ? `${toFixedOrDash(site.elevation, 1)} m` : "-"], ["iPack", site.ipack_email ?? "-"]].map(([l, v]) => (
-                  <div key={l} className="flex justify-between gap-4"><span className="text-slate-500">{l}</span><span className="text-slate-200 font-mono text-xs text-right">{v}</span></div>
+                  <div key={l} className="flex justify-between gap-4"><span className="text-slate-500">{l}</span><span className="text-slate-800 font-mono text-xs text-right">{v}</span></div>
                 ))}
               </div>
             </div>
@@ -469,7 +469,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                   onChange={(e) => setSelectedDate(e.target.value)}
                   onKeyDown={(e) => e.preventDefault()}
                   onFocus={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
-                  className="rounded-xl border border-[#c8def8] bg-white/70 px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
+                  className="rounded-xl border border-[#c8def8] bg-white/70 px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
                 />
                 <button
                   type="button"
@@ -542,8 +542,8 @@ export default function SiteDetail({ site }: { site: Site }) {
                   </thead>
                   <tbody className="divide-y divide-[#d6e8ff]/70">
                     {dailyExcelTable.rows.map((row) => (
-                      <tr key={row.ch} className="hover:bg-slate-800/20 transition-colors">
-                        <td className="px-4 py-2.5 text-xs text-slate-200 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch]}</td>
+                      <tr key={row.ch} className="hover:bg-blue-50/60 transition-colors">
+                        <td className="px-4 py-2.5 text-xs text-slate-800 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch]}</td>
                         <td className="px-3 py-2.5 text-xs text-slate-700 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.height ?? "-"}</td>
                         {row.values.map((v, i) => <td key={`${row.ch}-${i}`} className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(v, 2)}</td>)}
                         <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.ave, 2)}</td>
@@ -573,7 +573,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                   onChange={(e) => setSelectedMonth(e.target.value)}
                   onKeyDown={(e) => e.preventDefault()}
                   onFocus={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
-                  className="rounded-xl border border-[#c8def8] bg-white/70 px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
+                  className="rounded-xl border border-[#c8def8] bg-white/70 px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
                 />
                 <button
                   type="button"
@@ -588,7 +588,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             <button
               type="button"
               onClick={downloadMonthlyExcel}
-              className="rounded-xl border border-blue-500/40 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-300 hover:bg-blue-500/20"
+              className="rounded-xl border border-blue-500/40 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-500/20"
             >
               고객사 엑셀 다운로드
             </button>
@@ -633,8 +633,8 @@ export default function SiteDetail({ site }: { site: Site }) {
                   </thead>
                   <tbody className="divide-y divide-[#d6e8ff]/70">
                     {excelMonthlyTable.rows.map((row) => (
-                      <tr key={row.ch} className="hover:bg-slate-800/20 transition-colors">
-                        <td className="px-4 py-2.5 text-xs text-slate-200 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch]}</td>
+                      <tr key={row.ch} className="hover:bg-blue-50/60 transition-colors">
+                        <td className="px-4 py-2.5 text-xs text-slate-800 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch]}</td>
                         <td className="px-3 py-2.5 text-xs text-slate-700 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.height ?? "-"}</td>
                         {row.dayValues.map((v, i) => (
                           <td key={`${row.ch}-${i}`} className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(v, 2)}</td>

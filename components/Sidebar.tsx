@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Wind, LayoutDashboard, MapPin, Users, Database, Settings, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, MapPin, Users, Database, Settings, LogOut, Menu, X } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
@@ -28,12 +28,10 @@ function NavContent({
       {/* 로고 */}
       <div className="p-5 border-b border-[#d6e8ff]">
         <div className="flex items-center gap-2.5">
-          <div className="flex w-8 h-8 border rounded-lg items-center justify-center border-[#c8def8]/80 bg-slate-900/80">
-            <Wind className="w-4 h-4 text-blue-400" />
-          </div>
+          <img src="/brand/logo-mark.png" alt="WindTree" className="w-8 h-8 rounded-lg" />
           <div>
-            <p className="text-sm font-bold text-slate-900">WindTree</p>
-            <p className="text-[10px] text-blue-400 font-semibold tracking-widest">WMS</p>
+            <img src="/brand/logo-horizontal.png" alt="WindTree" className="h-5 w-auto object-contain" />
+            <p className="text-[10px] text-blue-500 font-semibold tracking-widest mt-0.5">WMS DASHBOARD</p>
           </div>
         </div>
       </div>

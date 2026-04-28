@@ -149,7 +149,7 @@ export default function SitesContent() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => { setRldResult(""); setModal("rld"); }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[#c8def8] hover:border-slate-500 text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[#c8def8] hover:border-blue-300 text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors">
             <FileUp className="w-4 h-4" /> RLD로 추가
           </button>
           <button onClick={openAdd}
@@ -170,7 +170,7 @@ export default function SitesContent() {
           </thead>
           <tbody className="divide-y divide-[#d6e8ff]/70">
             {sites.map((site) => (
-              <tr key={site.id} className="hover:bg-slate-800/20 transition-colors">
+              <tr key={site.id} className="hover:bg-blue-50/60 transition-colors">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-blue-400 flex-shrink-0" />
@@ -178,7 +178,7 @@ export default function SitesContent() {
                       className="text-sm font-medium text-slate-900 hover:text-blue-400 transition-colors text-left">{site.name}</button>
                   </div>
                 </td>
-                <td className="px-4 py-3"><span className="text-xs font-mono bg-slate-800 text-slate-700 px-2 py-1 rounded">{site.site_number}</span></td>
+                <td className="px-4 py-3"><span className="text-xs font-mono bg-blue-50 text-slate-700 px-2 py-1 rounded">{site.site_number}</span></td>
                 <td className="px-4 py-3 text-sm text-slate-500">{site.location_name ?? "-"}</td>
                 <td className="px-4 py-3 text-sm text-slate-500">{site.elevation ? `${site.elevation}m` : "-"}</td>
                 <td className="px-4 py-3">
@@ -188,7 +188,7 @@ export default function SitesContent() {
                 </td>
                 <td className="px-4 py-3">
                   <button onClick={() => openEdit(site)}
-                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-700/50 transition-colors inline-flex">
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-blue-50 transition-colors inline-flex">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                 </td>
@@ -206,7 +206,7 @@ export default function SitesContent() {
         <Modal title="RLD 파일로 사이트 추가" onClose={() => setModal(null)}>
           <div className="space-y-4">
             <p className="text-xs text-slate-500">RLD 파일을 업로드하면 파일명에서 사이트 번호를 자동 인식하고, 신규 사이트면 자동으로 생성합니다.</p>
-            <label className={`flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-dashed cursor-pointer transition-all ${rldUploading ? "border-blue-500 bg-blue-500/10" : "border-[#c8def8] hover:border-slate-500"}`}>
+            <label className={`flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-dashed cursor-pointer transition-all ${rldUploading ? "border-blue-500 bg-blue-500/10" : "border-[#c8def8] hover:border-blue-300"}`}>
               <input type="file" accept=".rld" multiple className="hidden"
                 onChange={async (e) => { if (e.target.files) for (const f of Array.from(e.target.files)) await handleRLD(f); }} />
               {rldUploading ? (
@@ -258,7 +258,7 @@ export default function SitesContent() {
                 <button
                   type="button"
                   onClick={() => setForm({...form,gmail_sync_enabled:!form.gmail_sync_enabled})}
-                  className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${form.gmail_sync_enabled ? "bg-blue-600" : "bg-slate-700"}`}>
+                  className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${form.gmail_sync_enabled ? "bg-blue-600" : "bg-slate-300"}`}>
                   <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${form.gmail_sync_enabled ? "translate-x-5" : "translate-x-0.5"}`} />
                 </button>
               </div>
@@ -274,7 +274,7 @@ export default function SitesContent() {
               <button
                 type="button"
                 onClick={() => setForm({...form,is_active:!form.is_active})}
-                className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${form.is_active ? "bg-blue-600" : "bg-slate-700"}`}>
+                className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${form.is_active ? "bg-blue-600" : "bg-slate-300"}`}>
                 <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${form.is_active ? "translate-x-5" : "translate-x-0.5"}`} />
               </button>
             </div>

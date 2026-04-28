@@ -125,7 +125,7 @@ export default function DataPage() {
             <select
               value={selectedSite}
               onChange={(e) => setSelectedSite(e.target.value)}
-              className="rounded-lg border border-[#c8def8] bg-white/70 px-3 py-1.5 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
+              className="rounded-lg border border-[#c8def8] bg-white/70 px-3 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none"
             >
               <option value="all">전체</option>
               {siteOptions.map((site) => (
@@ -149,7 +149,7 @@ export default function DataPage() {
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">업로드 이력이 없습니다</td></tr>
               ) : (
                 filteredUploads.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-800/20 transition-colors">
+                  <tr key={u.id} className="hover:bg-blue-50/60 transition-colors">
                     <td className="px-4 py-3">{statusIcon(u.status)}</td>
                     <td className="px-4 py-3 text-xs font-mono text-slate-700 max-w-[160px] truncate">{u.file_name ?? "-"}</td>
                     <td className="px-4 py-3 text-sm text-slate-500">{u.sites?.name ?? "-"}</td>
