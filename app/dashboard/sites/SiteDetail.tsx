@@ -1038,12 +1038,12 @@ export default function SiteDetail({ site }: { site: Site }) {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
             <label className="space-y-1">
-              <span className="text-xs text-slate-500">터빈 연식 구간</span>
+              <span className="text-xs text-slate-500 inline-flex items-center gap-2">터빈 연식 구간 <b className="text-slate-700">손실률 {Math.round(simulationSummary.loss * 100)}%</b></span>
               <select value={turbineAgeBand} onChange={(e) => setTurbineAgeBand(e.target.value as "0-5" | "6-10" | "11-15" | "16+")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
-                <option value="0-5">0~5년</option>
-                <option value="6-10">6~10년</option>
-                <option value="11-15">11~15년</option>
-                <option value="16+">16년 이상</option>
+                <option value="0-5">0~5년 (12%)</option>
+                <option value="6-10">6~10년 (15%)</option>
+                <option value="11-15">11~15년 (18%)</option>
+                <option value="16+">16년 이상 (22%)</option>
               </select>
             </label>
             <label className="space-y-1">
@@ -1069,15 +1069,6 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
           </div>
 
-          <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3">
-            <div className="text-xs font-semibold text-slate-700 mb-2">연식 구간별 기본 손실률</div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-              <div className={`rounded p-2 border ${turbineAgeBand === "0-5" ? "border-blue-300 bg-blue-50" : "border-[#d6e8ff] bg-white"}`}><div className="text-slate-500">0~5년</div><div className="font-semibold text-slate-900">12%</div></div>
-              <div className={`rounded p-2 border ${turbineAgeBand === "6-10" ? "border-blue-300 bg-blue-50" : "border-[#d6e8ff] bg-white"}`}><div className="text-slate-500">6~10년</div><div className="font-semibold text-slate-900">15%</div></div>
-              <div className={`rounded p-2 border ${turbineAgeBand === "11-15" ? "border-blue-300 bg-blue-50" : "border-[#d6e8ff] bg-white"}`}><div className="text-slate-500">11~15년</div><div className="font-semibold text-slate-900">18%</div></div>
-              <div className={`rounded p-2 border ${turbineAgeBand === "16+" ? "border-blue-300 bg-blue-50" : "border-[#d6e8ff] bg-white"}`}><div className="text-slate-500">16년 이상</div><div className="font-semibold text-slate-900">22%</div></div>
-            </div>
-          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
             <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3"><div className="text-slate-500 text-xs">누적 P50</div><div className="text-slate-900 font-semibold mt-1">{toFixedOrDash(simulationSummary.p50, 1)} MWh</div></div>
