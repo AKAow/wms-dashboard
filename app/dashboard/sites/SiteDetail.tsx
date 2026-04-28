@@ -371,6 +371,32 @@ export default function SiteDetail({ site }: { site: Site }) {
     return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${lat}%2C${lon}`;
   }, [site.latitude, site.longitude]);
 
+  const monthRows = useMemo(
+    () => dailyStats.filter((row) => row.date.startsWith(selectedMonth)),
+    [dailyStats, selectedMonth],
+  );
+
+  const monthAvgWind = useMemo(() => {
+    const values = monthRows
+      .filter((row) => row.channel === "ch1" && typeof row.avg_value === "number")
+      .map((row) => row.avg_value as number);
+    if (!values.length) return null;
+    return values.reduce((a, b) => a + b, 0) / values.length;
+  }, [monthRows]);
+
+  const monthCoverage = useMemo(() => {
+    const days = new Set(monthRows.filter((row) => row.channel === "ch1").map((row) => row.date));
+    const [y, m] = selectedMonth.split("-").map(Number);
+    if (!y || !m) return 0;
+    const daysInMonth = new Date(y, m, 0).getDate();
+    return Math.round((days.size / daysInMonth) * 100);
+  }, [monthRows, selectedMonth]);
+
+  const latestDataDate = useMemo(() => {
+    const last = dailyStats[dailyStats.length - 1]?.date;
+    return last ?? "-";
+  }, [dailyStats]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -394,6 +420,25 @@ export default function SiteDetail({ site }: { site: Site }) {
 
       {tab === "overview" && (
         <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-4">
+              <p className="text-xs text-slate-500 uppercase">평균 풍속 ({selectedMonth})</p>
+              <p className="text-2xl font-semibold text-slate-900 mt-2">{toFixedOrDash(monthAvgWind, 2)} m/s</p>
+            </div>
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-4">
+              <p className="text-xs text-slate-500 uppercase">월 데이터 커버리지</p>
+              <p className="text-2xl font-semibold text-slate-900 mt-2">{monthCoverage}%</p>
+            </div>
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-4">
+              <p className="text-xs text-slate-500 uppercase">최근 동기화일</p>
+              <p className="text-2xl font-semibold text-slate-900 mt-2">{latestDataDate}</p>
+            </div>
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-4">
+              <p className="text-xs text-slate-500 uppercase">관측 일수 ({selectedMonth})</p>
+              <p className="text-2xl font-semibold text-slate-900 mt-2">{new Set(monthRows.filter((r) => r.channel === "ch1").map((r) => r.date)).size}일</p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-400" />사이트 정보</h3>
@@ -409,6 +454,10 @@ export default function SiteDetail({ site }: { site: Site }) {
                 {Object.entries(CHANNEL_LABELS).map(([ch, label]) => (
                   <div key={ch} className="flex items-center gap-2 text-xs"><span className="text-blue-400 font-mono w-8">{ch}</span><span className="text-slate-500">{label}</span></div>
                 ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button onClick={() => setTab("daily")} className="rounded-lg border border-[#c8def8] bg-white/80 px-3 py-2 text-xs text-slate-700 hover:bg-blue-50">일간 데이터 보기</button>
+                <button onClick={() => setTab("monthly")} className="rounded-lg bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-500">월간 통계 보기</button>
               </div>
             </div>
           </div>
@@ -441,10 +490,10 @@ export default function SiteDetail({ site }: { site: Site }) {
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={overviewChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
                   <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
-                  <Tooltip contentStyle={{ backgroundColor: "#0b111d", border: "1px solid #1e293b", borderRadius: "8px", color: "#f8fafc" }} />
+                  <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
                   <Legend wrapperStyle={{ fontSize: "12px" }} />
                   <Line type="monotone" dataKey="ch1" name="100m 풍속" stroke={CHART_COLORS.ch1} dot={false} strokeWidth={2} />
                   <Line type="monotone" dataKey="ch2" name="96m 풍속" stroke={CHART_COLORS.ch2} dot={false} strokeWidth={2} />
@@ -490,10 +539,10 @@ export default function SiteDetail({ site }: { site: Site }) {
               <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><Wind className="w-4 h-4 text-blue-400" />Wind Speed</h3>
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={dailyExcelData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
                   <XAxis dataKey="time" tick={{ fontSize: 10, fill: "#64748b" }} interval={11} />
                   <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
-                  <Tooltip contentStyle={{ backgroundColor: "#0b111d", border: "1px solid #1e293b", borderRadius: "8px", color: "#f8fafc" }} />
+                  <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
                   <Legend wrapperStyle={{ fontSize: "11px" }} />
                   {EXCEL_WIND_SPEED_CHANNELS.map((ch) => <Line key={ch} type="monotone" dataKey={ch} name={CHANNEL_LABELS[ch]} stroke={CHART_COLORS[ch] ?? "#3b82f6"} dot={false} strokeWidth={1.8} />)}
                 </LineChart>
@@ -504,10 +553,10 @@ export default function SiteDetail({ site }: { site: Site }) {
               <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />Wind Direction</h3>
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={dailyExcelData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
                   <XAxis dataKey="time" tick={{ fontSize: 10, fill: "#64748b" }} interval={11} />
                   <YAxis tick={{ fontSize: 11, fill: "#64748b" }} domain={[0, 360]} unit=" °" />
-                  <Tooltip contentStyle={{ backgroundColor: "#0b111d", border: "1px solid #1e293b", borderRadius: "8px", color: "#f8fafc" }} />
+                  <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
                   <Legend wrapperStyle={{ fontSize: "11px" }} />
                   {EXCEL_WIND_DIR_CHANNELS.map((ch) => <Line key={ch} type="monotone" dataKey={ch} name={CHANNEL_LABELS[ch]} stroke={CHART_COLORS[ch] ?? "#94a3b8"} dot={false} strokeWidth={1.8} />)}
                 </LineChart>
@@ -518,10 +567,10 @@ export default function SiteDetail({ site }: { site: Site }) {
               <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-blue-400" />Atmospheric / Humidity / Temp</h3>
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={dailyExcelData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
                   <XAxis dataKey="time" tick={{ fontSize: 10, fill: "#64748b" }} interval={11} />
                   <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
-                  <Tooltip contentStyle={{ backgroundColor: "#0b111d", border: "1px solid #1e293b", borderRadius: "8px", color: "#f8fafc" }} />
+                  <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
                   <Legend wrapperStyle={{ fontSize: "11px" }} />
                   {EXCEL_ATMO_CHANNELS.map((ch) => <Line key={ch} type="monotone" dataKey={ch} name={CHANNEL_LABELS[ch]} stroke={CHART_COLORS[ch] ?? "#22d3ee"} dot={false} strokeWidth={1.8} />)}
                 </LineChart>
@@ -601,10 +650,10 @@ export default function SiteDetail({ site }: { site: Site }) {
               <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />엑셀형 월간 채널 비교 그래프 (평균값)</h3>
               <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={excelMonthlyChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
                   <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
-                  <Tooltip contentStyle={{ backgroundColor: "#0b111d", border: "1px solid #1e293b", borderRadius: "8px", color: "#f8fafc" }} />
+                  <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
                   <Legend wrapperStyle={{ fontSize: "12px" }} />
                   <Line type="monotone" dataKey="ch1" name="100m 풍속 (N)" stroke={CHART_COLORS.ch1} dot={false} strokeWidth={2} />
                   <Line type="monotone" dataKey="ch2" name="96m 풍속 (N)" stroke={CHART_COLORS.ch2} dot={false} strokeWidth={2} />
