@@ -53,6 +53,8 @@ const AGE_LOSS_MAP: Record<"0-5" | "6-10" | "11-15" | "16+", number> = {
   "16+": 0.22,
 };
 
+const ONSHORE_CAPACITY_OPTIONS = [4.0, 4.5, 5.0, 5.6, 6.2] as const;
+
 const getKSTParts = (date = new Date()) => {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
@@ -657,6 +659,24 @@ export default function SiteDetail({ site }: { site: Site }) {
     return { grade: "보류", tone: "text-rose-700 bg-rose-50 border-rose-200", reason: "데이터 품질 또는 풍황 기준 미달" };
   }, [monthCoverage, simulationSummary.avgWind]);
 
+  const simulationAdvice = useMemo(() => {
+    const p90Ratio = simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0;
+    const coverage = monthCoverage;
+    const wind = simulationSummary.avgWind;
+    const lossPct = Math.round(simulationSummary.loss * 100);
+
+    if (coverage < 60) {
+      return `데이터 커버리지(${coverage}%)가 낮아 추가 관측 후 재평가를 권장합니다.`;
+    }
+    if (wind < 5.5) {
+      return `평균 풍속(${toFixedOrDash(wind, 2)} m/s) 기준으로는 보수적 용량(4.0~4.5MW) 검토를 권장합니다.`;
+    }
+    if (p90Ratio < 0.8) {
+      return `불확실성 폭이 커서(P90/P50=${toFixedOrDash(p90Ratio, 2)}) 손실률(${lossPct}%) 및 운전가정을 재점검하는 것이 좋습니다.`;
+    }
+    return `현 조건에서는 ${turbineMw.toFixed(1)}MW 기준 시나리오가 현실적인 범위로 보입니다. 인허가·계통 제약 검토를 병행하세요.`;
+  }, [simulationSummary, monthCoverage, turbineMw]);
+
   return (
     <div className="space-y-6 sitekit">
       <div className="topbar">
@@ -1071,9 +1091,9 @@ export default function SiteDetail({ site }: { site: Site }) {
             <span className="text-xs">({simulationAssessment.reason})</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-sm">
             <label className="space-y-1">
-              <span className="text-xs text-slate-500 inline-flex items-center gap-2">터빈 연식 구간 <b className="text-slate-700">손실률 {Math.round(simulationSummary.loss * 100)}%</b></span>
+              <span className="text-xs text-slate-500 inline-flex items-center gap-2 whitespace-nowrap">터빈 연식 구간 <b className="text-slate-700">손실률 {Math.round(simulationSummary.loss * 100)}%</b></span>
               <select value={turbineAgeBand} onChange={(e) => setTurbineAgeBand(e.target.value as "0-5" | "6-10" | "11-15" | "16+")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
                 <option value="0-5">0~5년 (12%)</option>
                 <option value="6-10">6~10년 (15%)</option>
@@ -1084,16 +1104,11 @@ export default function SiteDetail({ site }: { site: Site }) {
             <label className="space-y-1">
               <span className="text-xs text-slate-500">터빈 용량 (MW)</span>
               <select value={String(turbineMw)} onChange={(e) => setTurbineMw(Number(e.target.value))} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
-                <option value="3.6">3.6 MW</option>
-                <option value="4.0">4.0 MW</option>
-                <option value="4.2">4.2 MW</option>
-                <option value="4.5">4.5 MW</option>
-                <option value="5.0">5.0 MW</option>
+                {ONSHORE_CAPACITY_OPTIONS.map((mw) => (
+                  <option key={mw} value={mw}>{mw.toFixed(1)} MW</option>
+                ))}
               </select>
             </label>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
             <label className="space-y-1">
               <span className="text-xs text-slate-500">적용기간 프리셋</span>
               <select value={simPreset} onChange={(e) => setSimPreset(e.target.value as "3M" | "6M" | "12M" | "custom")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
@@ -1156,6 +1171,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div><b>P50</b>: 기준 시나리오에서 초과 달성 확률이 약 50%인 중간값 추정치</div>
             <div><b>P75</b>: 보수적 관점의 추정치(초과 달성 확률 약 75%)</div>
             <div><b>P90</b>: 매우 보수적 추정치(초과 달성 확률 약 90%)</div>
+            <div className="pt-1"><b>AI 조언</b>: {simulationAdvice}</div>
           </div>
 
           <ResponsiveContainer width="100%" height={260}>
