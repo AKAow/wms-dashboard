@@ -604,9 +604,9 @@ export default function SiteDetail({ site }: { site: Site }) {
       return Array.from(weekMap.values()).map((r) => ({
         label: r.label,
         wind: r.count ? r.windSum / r.count : 0,
-        p50: r.count ? r.p50Sum / r.count : 0,
-        p75: r.count ? r.p75Sum / r.count : 0,
-        p90: r.count ? r.p90Sum / r.count : 0,
+        p50: r.p50Sum,
+        p75: r.p75Sum,
+        p90: r.p90Sum,
       }));
     }
 
@@ -624,13 +624,17 @@ export default function SiteDetail({ site }: { site: Site }) {
     return Array.from(monthMap.values()).map((r) => ({
       label: r.label,
       wind: r.count ? r.windSum / r.count : 0,
-      p50: r.count ? r.p50Sum / r.count : 0,
-      p75: r.count ? r.p75Sum / r.count : 0,
-      p90: r.count ? r.p90Sum / r.count : 0,
+      p50: r.p50Sum,
+      p75: r.p75Sum,
+      p90: r.p90Sum,
     }));
   }, [simulationDailyRows, simPeriod]);
 
   const simulationSummary = useMemo(() => {
+    const totalP50 = simulationDailyRows.reduce((a, b) => a + b.p50, 0);
+    const totalP75 = simulationDailyRows.reduce((a, b) => a + b.p75, 0);
+    const totalP90 = simulationDailyRows.reduce((a, b) => a + b.p90, 0);
+
     const p50 = simulationRows.reduce((a, b) => a + b.p50, 0);
     const p75 = simulationRows.reduce((a, b) => a + b.p75, 0);
     const p90 = simulationRows.reduce((a, b) => a + b.p90, 0);
@@ -638,8 +642,8 @@ export default function SiteDetail({ site }: { site: Site }) {
     const avgP50 = simulationRows.length ? p50 / simulationRows.length : 0;
     const avgP75 = simulationRows.length ? p75 / simulationRows.length : 0;
     const avgP90 = simulationRows.length ? p90 / simulationRows.length : 0;
-    return { p50, p75, p90, avgWind, avgP50, avgP75, avgP90, loss: AGE_LOSS_MAP[turbineAgeBand] };
-  }, [simulationRows, turbineAgeBand]);
+    return { totalP50, totalP75, totalP90, avgWind, avgP50, avgP75, avgP90, loss: AGE_LOSS_MAP[turbineAgeBand] };
+  }, [simulationDailyRows, simulationRows, turbineAgeBand]);
 
   const simulationAssessment = useMemo(() => {
     const coverage = monthCoverage;
@@ -1128,9 +1132,9 @@ export default function SiteDetail({ site }: { site: Site }) {
               <div className="text-slate-500 text-xs mb-2">누적 추정값</div>
               <table className="w-full text-xs">
                 <tbody>
-                  <tr><td className="py-1 text-slate-600">P50</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.p50, 1)} MWh</td></tr>
-                  <tr><td className="py-1 text-slate-600">P75</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.p75, 1)} MWh</td></tr>
-                  <tr><td className="py-1 text-slate-600">P90</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.p90, 1)} MWh</td></tr>
+                  <tr><td className="py-1 text-slate-600">P50</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP50, 1)} MWh</td></tr>
+                  <tr><td className="py-1 text-slate-600">P75</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP75, 1)} MWh</td></tr>
+                  <tr><td className="py-1 text-slate-600">P90</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP90, 1)} MWh</td></tr>
                 </tbody>
               </table>
             </div>
