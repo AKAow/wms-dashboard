@@ -390,46 +390,58 @@ export default function SiteDetail({ site }: { site: Site }) {
     return { dayLabels, rows };
   }, [selectedMonthStats, selectedMonth]);
 
-  const downloadMonthlyExcel = useCallback(() => {
-    const fixedTemplates: Record<string, string> = {
-      "2026-03": "/reports/202603_Wando_Daesin_Monthly_Report_260403.xlsx",
-    };
+  const downloadMonthlyExcel = useCallback(async () => {
+    const templatePath = "/reports/202603_Wando_Daesin_Monthly_Report_260403.xlsx";
 
-    const templatePath = fixedTemplates[selectedMonth];
-    if (templatePath) {
-      const a = document.createElement("a");
-      a.href = templatePath;
-      a.download = `${site.site_number}_${selectedMonth}_Monthly_Report.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      return;
-    }
-
+    const fixed31DayLabels = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"));
     const header = [
       "Description",
       "Height",
-      ...excelMonthlyTable.dayLabels,
+      ...fixed31DayLabels,
       "AVE",
       "MAX",
       "MIN",
       "STD",
     ];
 
-    const rows = excelMonthlyTable.rows.map((row) => [
-      EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch],
-      EXCEL_SENSOR_META[row.ch]?.height ?? "-",
-      ...row.dayValues.map((v) => (typeof v === "number" ? Number(v.toFixed(2)) : "")),
-      typeof row.ave === "number" ? Number(row.ave.toFixed(2)) : "",
-      typeof row.max === "number" ? Number(row.max.toFixed(2)) : "",
-      typeof row.min === "number" ? Number(row.min.toFixed(2)) : "",
-      typeof row.std === "number" ? Number(row.std.toFixed(2)) : "",
-    ]);
+    const rows = excelMonthlyTable.rows.map((row) => {
+      const dayMap = new Map<string, number>();
+      excelMonthlyTable.dayLabels.forEach((day, idx) => {
+        const value = row.dayValues[idx];
+        if (typeof value === "number") dayMap.set(day, value);
+      });
 
-    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Monthly");
-    XLSX.writeFile(wb, `${site.site_number}_${selectedMonth}_Monthly_Report.xlsx`);
+      return [
+        EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch],
+        EXCEL_SENSOR_META[row.ch]?.height ?? "-",
+        ...fixed31DayLabels.map((d) => {
+          const v = dayMap.get(d);
+          return typeof v === "number" ? Number(v.toFixed(2)) : "";
+        }),
+        typeof row.ave === "number" ? Number(row.ave.toFixed(2)) : "",
+        typeof row.max === "number" ? Number(row.max.toFixed(2)) : "",
+        typeof row.min === "number" ? Number(row.min.toFixed(2)) : "",
+        typeof row.std === "number" ? Number(row.std.toFixed(2)) : "",
+      ];
+    });
+
+    try {
+      const res = await fetch(templatePath);
+      const ab = await res.arrayBuffer();
+      const wb = XLSX.read(ab, { type: "array" });
+      const sheetName = wb.SheetNames[0] || "Monthly";
+      const ws = wb.Sheets[sheetName] ?? XLSX.utils.aoa_to_sheet([]);
+
+      XLSX.utils.sheet_add_aoa(ws, [header, ...rows], { origin: "A1" });
+      wb.Sheets[sheetName] = ws;
+      XLSX.writeFile(wb, `${site.site_number}_${selectedMonth}_Monthly_Report.xlsx`);
+      return;
+    } catch {
+      const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Monthly");
+      XLSX.writeFile(wb, `${site.site_number}_${selectedMonth}_Monthly_Report.xlsx`);
+    }
   }, [excelMonthlyTable, selectedMonth, site.site_number]);
 
   const monthRows = useMemo(
