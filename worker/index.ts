@@ -323,14 +323,19 @@ function jsDayToKstDay(jsDay: number): KstDay | null {
   return JS_DAY_TO_KST[jsDay] ?? null;
 }
 
-function dayToCron(day: KstDay): string {
+function dayTimeToCron(day: KstDay, hourKst: number, minuteKst: number): string {
   const kstJsDay = kstDayToJsDay(day);
-  // 06:00 KST == 21:00 UTC(previous day)
-  const utcDow = (kstJsDay + 6) % 7;
-  return `0 21 * * ${utcDow}`;
+  const totalMinutes = hourKst * 60 + minuteKst;
+  const utcTotal = totalMinutes - 9 * 60;
+  const dayShift = utcTotal < 0 ? -1 : utcTotal >= 24 * 60 ? 1 : 0;
+  const normalized = ((utcTotal % (24 * 60)) + 24 * 60) % (24 * 60);
+  const utcHour = Math.floor(normalized / 60);
+  const utcMinute = normalized % 60;
+  const utcDow = (kstJsDay + dayShift + 7) % 7;
+  return `${utcMinute} ${utcHour} * * ${utcDow}`;
 }
 
-function cronToDayKst(cron: string): KstDay | null {
+function cronToDayTimeKst(cron: string): { dayKst: KstDay; hourKst: number; minuteKst: number } | null {
   const m = cron.trim().match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+([0-7])$/);
   if (!m) return null;
 
@@ -343,10 +348,15 @@ function cronToDayKst(cron: string): KstDay | null {
   const utcDow = rawDow === 7 ? 0 : rawDow;
   if (utcDow < 0 || utcDow > 6) return null;
 
-  const kstHour = hour + 9;
-  const dayShift = kstHour >= 24 ? 1 : 0;
+  const kstTotal = hour * 60 + minute + 9 * 60;
+  const dayShift = kstTotal >= 24 * 60 ? 1 : 0;
+  const normalized = kstTotal % (24 * 60);
+  const hourKst = Math.floor(normalized / 60);
+  const minuteKst = normalized % 60;
   const kstJsDay = (utcDow + dayShift) % 7;
-  return jsDayToKstDay(kstJsDay);
+  const dayKst = jsDayToKstDay(kstJsDay);
+  if (!dayKst) return null;
+  return { dayKst, hourKst, minuteKst };
 }
 
 async function getCronConfig(env: Env): Promise<Response> {
@@ -365,20 +375,35 @@ async function getCronConfig(env: Env): Promise<Response> {
     ? d.result
     : (d.result?.schedules || []);
   const cron = schedules[0]?.cron || null;
-  const dayKst = cron ? cronToDayKst(cron) : null;
-  return new Response(JSON.stringify({ ok: true, cron, dayKst, schedules }));
+  const parsed = cron ? cronToDayTimeKst(cron) : null;
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      cron,
+      dayKst: parsed?.dayKst ?? null,
+      hourKst: parsed?.hourKst ?? null,
+      minuteKst: parsed?.minuteKst ?? null,
+      schedules,
+    }),
+  );
 }
 
-async function setCronConfig(env: Env, dayKst: string): Promise<Response> {
+async function setCronConfig(env: Env, dayKst: string, hourKst = 10, minuteKst = 0): Promise<Response> {
   if (!env.CLOUDFLARE_API_TOKEN || !env.CLOUDFLARE_ACCOUNT_ID) {
     return new Response(JSON.stringify({ ok: false, error: "cloudflare-config-missing" }), { status: 500 });
   }
   if (!KST_DAYS.includes(dayKst as KstDay)) {
     return new Response(JSON.stringify({ ok: false, error: "invalid-day" }), { status: 400 });
   }
+  if (!Number.isInteger(hourKst) || hourKst < 0 || hourKst > 23) {
+    return new Response(JSON.stringify({ ok: false, error: "invalid-hour" }), { status: 400 });
+  }
+  if (!Number.isInteger(minuteKst) || minuteKst < 0 || minuteKst > 59) {
+    return new Response(JSON.stringify({ ok: false, error: "invalid-minute" }), { status: 400 });
+  }
 
   const script = env.CLOUDFLARE_SCRIPT_NAME || "wms-rld-worker";
-  const cron = dayToCron(dayKst as KstDay);
+  const cron = dayTimeToCron(dayKst as KstDay, hourKst, minuteKst);
 
   const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${script}/schedules`, {
     method: "PUT",
@@ -392,7 +417,7 @@ async function setCronConfig(env: Env, dayKst: string): Promise<Response> {
   if (!r.ok || !d?.success) {
     return new Response(JSON.stringify({ ok: false, error: "cloudflare-update-failed", detail: d }), { status: 500 });
   }
-  return new Response(JSON.stringify({ ok: true, cron, dayKst }));
+  return new Response(JSON.stringify({ ok: true, cron, dayKst, hourKst, minuteKst }));
 }
 
 async function runScheduledSync(env: Env): Promise<Response> {
@@ -519,8 +544,8 @@ const worker = {
     }
 
     if (url.pathname === "/cron-config" && request.method === "POST") {
-      const body = (await request.json().catch(() => ({}))) as { dayKst?: string };
-      const res = await setCronConfig(env, body.dayKst || "");
+      const body = (await request.json().catch(() => ({}))) as { dayKst?: string; hourKst?: number; minuteKst?: number };
+      const res = await setCronConfig(env, body.dayKst || "", body.hourKst ?? 10, body.minuteKst ?? 0);
       return new Response(await res.text(), { status: res.status, headers: { ...cors, "Content-Type": "application/json" } });
     }
 

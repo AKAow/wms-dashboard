@@ -5,12 +5,14 @@ import { Settings, Key, Mail, Globe, CheckCircle, Loader2, CalendarDays } from "
 
 const WORKER_BASE = "https://wms-rld-worker.aka-74b.workers.dev";
 const DAYS = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"] as const;
+const TIMES = ["06:00", "10:00", "14:00", "18:00"] as const;
 
 export default function SettingsPage() {
   const [nrgClientId, setNrgClientId] = useState("YPFS53vAxMLrbkaAOhwaMC8R8zhKGI0A");
   const [nrgSecret, setNrgSecret] = useState("");
   const [dashboardUrl, setDashboardUrl] = useState("https://wms-dashboard-ckn.pages.dev");
   const [syncDay, setSyncDay] = useState<(typeof DAYS)[number]>("수요일");
+  const [syncTime, setSyncTime] = useState<(typeof TIMES)[number]>("10:00");
   const [loadingCron, setLoadingCron] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -21,9 +23,15 @@ export default function SettingsPage() {
     (async () => {
       try {
         const r = await fetch(`${WORKER_BASE}/cron-config`, { cache: "no-store" });
-        const d = (await r.json()) as { ok?: boolean; dayKst?: string };
+        const d = (await r.json()) as { ok?: boolean; dayKst?: string; hourKst?: number; minuteKst?: number };
         if (alive && r.ok && d?.ok && d.dayKst && DAYS.includes(d.dayKst as (typeof DAYS)[number])) {
           setSyncDay(d.dayKst as (typeof DAYS)[number]);
+          if (typeof d.hourKst === "number" && typeof d.minuteKst === "number") {
+            const hh = String(d.hourKst).padStart(2, "0");
+            const mm = String(d.minuteKst).padStart(2, "0");
+            const t = `${hh}:${mm}`;
+            if (TIMES.includes(t as (typeof TIMES)[number])) setSyncTime(t as (typeof TIMES)[number]);
+          }
         }
       } catch {
         // noop: keep default value
@@ -43,7 +51,7 @@ export default function SettingsPage() {
       const r = await fetch(`${WORKER_BASE}/cron-config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dayKst: syncDay }),
+        body: JSON.stringify({ dayKst: syncDay, hourKst: Number(syncTime.split(":")[0]), minuteKst: 0 }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok || !d?.ok) {
@@ -104,12 +112,15 @@ export default function SettingsPage() {
               <div className="flex items-center gap-2">
                 <CalendarDays className="w-4 h-4 text-blue-400" />
                 <select value={syncDay} onChange={(e) => setSyncDay(e.target.value as (typeof DAYS)[number])} disabled={loadingCron} className="rounded-lg border border-[#c8def8] bg-white/70 px-3 py-1.5 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:opacity-60">
-                  {DAYS.map((day) => <option key={day} value={day}>{day} 06:00</option>)}
+                  {DAYS.map((day) => <option key={day} value={day}>{day}</option>)}
+                </select>
+                <select value={syncTime} onChange={(e) => setSyncTime(e.target.value as (typeof TIMES)[number])} disabled={loadingCron} className="rounded-lg border border-[#c8def8] bg-white/70 px-3 py-1.5 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:opacity-60">
+                  {TIMES.map((time) => <option key={time} value={time}>{time}</option>)}
                 </select>
               </div>
             </div>
             <div className="flex justify-between"><span className="text-slate-500">상태</span><span className="text-green-400">활성</span></div>
-            <p className="text-xs text-slate-500 pt-2 border-t border-[#d6e8ff]">현재 설정 기준: 주 1회 {syncDay} 06:00 KST</p>
+            <p className="text-xs text-slate-500 pt-2 border-t border-[#d6e8ff]">현재 설정 기준: 주 1회 {syncDay} {syncTime} KST</p>
           </div>
         </div>
 

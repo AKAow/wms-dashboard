@@ -12,6 +12,7 @@ export default function DataPage() {
   const supabase = createClient();
   const { uploads, load } = useUploadHistory(supabase);
   const [syncDay, setSyncDay] = useState("수요일");
+  const [syncTime, setSyncTime] = useState("10:00");
   const [selectedSite, setSelectedSite] = useState<string>("all");
 
   useAuthGuard(supabase);
@@ -25,9 +26,12 @@ export default function DataPage() {
     (async () => {
       try {
         const r = await fetch(`${WORKER_BASE}/cron-config`, { cache: "no-store" });
-        const d = (await r.json()) as { ok?: boolean; dayKst?: string };
+        const d = (await r.json()) as { ok?: boolean; dayKst?: string; hourKst?: number; minuteKst?: number };
         if (alive && r.ok && d?.ok && d.dayKst) {
           setSyncDay(d.dayKst);
+          if (typeof d.hourKst === "number" && typeof d.minuteKst === "number") {
+            setSyncTime(`${String(d.hourKst).padStart(2, "0")}:${String(d.minuteKst).padStart(2, "0")}`);
+          }
         }
       } catch {
         // noop: fallback to default
@@ -85,7 +89,7 @@ export default function DataPage() {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4 text-sm mt-4">
-          {[["동기화 방식", "사이트별 설정"], ["동기화 주기", `주 1회 (${syncDay} 06:00)`], ["마지막 실행", uploads[0] ? new Date(uploads[0].created_at).toLocaleString("ko") : "-"], ["상태", "활성"]].map(([l, v]) => (
+          {[["동기화 방식", "사이트별 설정"], ["동기화 주기", `주 1회 (${syncDay} ${syncTime})`], ["마지막 실행", uploads[0] ? new Date(uploads[0].created_at).toLocaleString("ko") : "-"], ["상태", "활성"]].map(([l, v]) => (
             <div key={l}>
               <p className="text-xs text-slate-500 mb-0.5">{l}</p>
               <p className={`text-sm ${l === "상태" ? "text-green-400 font-medium" : "text-slate-700"}`}>{v}</p>
