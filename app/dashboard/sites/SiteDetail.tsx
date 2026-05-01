@@ -677,16 +677,32 @@ export default function SiteDetail({ site }: { site: Site }) {
     const wind = simulationSummary.avgWind;
     const lossPct = Math.round(simulationSummary.loss * 100);
 
-    if (coverage < 60) {
-      return `데이터 커버리지(${coverage}%)가 낮아 추가 관측 후 재평가를 권장합니다.`;
+    let range: [number, number] = [4.0, 4.5];
+    if (wind >= 6.5 && p90Ratio >= 0.85 && coverage >= 80) range = [5.0, 6.2];
+    else if (wind >= 5.8 && p90Ratio >= 0.8 && coverage >= 70) range = [4.5, 5.6];
+    else if (wind >= 5.5 && p90Ratio >= 0.78 && coverage >= 60) range = [4.0, 5.0];
+
+    const inRange = turbineMw >= range[0] && turbineMw <= range[1];
+
+    let summary = `현재 조건의 현실적 용량 범위는 ${range[0].toFixed(1)}~${range[1].toFixed(1)}MW로 추정됩니다.`;
+    if (!inRange) {
+      summary += ` 선택값 ${turbineMw.toFixed(1)}MW는 권장 범위를 벗어납니다.`;
     }
-    if (wind < 5.5) {
-      return `평균 풍속(${toFixedOrDash(wind, 2)} m/s) 기준으로는 보수적 용량(4.0~4.5MW) 검토를 권장합니다.`;
-    }
-    if (p90Ratio < 0.8) {
-      return `불확실성 폭이 커서(P90/P50=${toFixedOrDash(p90Ratio, 2)}) 손실률(${lossPct}%) 및 운전가정을 재점검하는 것이 좋습니다.`;
-    }
-    return `현 조건에서는 ${turbineMw.toFixed(1)}MW 기준 시나리오가 현실적인 범위로 보입니다. 인허가·계통 제약 검토를 병행하세요.`;
+
+    if (coverage < 60) summary += ` 데이터 커버리지(${coverage}%)가 낮아 신뢰도는 제한적입니다.`;
+    else if (p90Ratio < 0.8) summary += ` P90/P50=${toFixedOrDash(p90Ratio, 2)}로 불확실성이 큰 편입니다.`;
+
+    return {
+      summary,
+      basis: [
+        `평균 풍속: ${toFixedOrDash(wind, 2)} m/s`,
+        `데이터 커버리지: ${coverage}%`,
+        `P90/P50 비율: ${toFixedOrDash(p90Ratio, 2)}`,
+        `연식 손실률 가정: ${lossPct}%`,
+      ],
+      range,
+      inRange,
+    };
   }, [simulationSummary, monthCoverage, turbineMw]);
 
   return (
@@ -1103,8 +1119,11 @@ export default function SiteDetail({ site }: { site: Site }) {
               <b>사업성 평가: {simulationAssessment.grade}</b>
               <span className="text-xs">({simulationAssessment.reason})</span>
             </div>
-            <div className="rounded-lg border border-[#d6e8ff] bg-white/70 px-3 py-2 text-xs text-slate-700">
-              <b>AI 조언</b>: {simulationAdvice}
+            <div className="rounded-lg border border-[#d6e8ff] bg-white/70 px-3 py-2 text-xs text-slate-700 space-y-1.5">
+              <div><b>AI 조언</b>: {simulationAdvice.summary}</div>
+              <div className="text-[11px] text-slate-600">
+                근거: {simulationAdvice.basis.join(" · ")}
+              </div>
             </div>
           </div>
 
