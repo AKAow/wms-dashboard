@@ -11,6 +11,7 @@ export interface Env {
   GMAIL_CLIENT_SECRET?: string;
   GMAIL_REFRESH_TOKEN?: string;
   GMAIL_USER?: string; // default: windtreeeng@gmail.com
+  GMAIL_MAX_ATTACHMENTS_PER_SITE?: string; // default: 10
 
   // Optional: Cloudflare API for updating cron trigger from web settings
   CLOUDFLARE_API_TOKEN?: string;
@@ -454,7 +455,8 @@ async function runScheduledSync(env: Env): Promise<Response> {
   // Cloudflare subrequest budget 보호 (1101 방지)
   const MAX_SITES_PER_RUN = 8;
   const MAX_MESSAGES_PER_SITE = 20;
-  const MAX_ATTACHMENTS_PER_SITE = 1;
+  const maxAttachmentsEnv = Number(env.GMAIL_MAX_ATTACHMENTS_PER_SITE || "10");
+  const MAX_ATTACHMENTS_PER_SITE = Number.isFinite(maxAttachmentsEnv) && maxAttachmentsEnv > 0 ? Math.floor(maxAttachmentsEnv) : 10;
   const limitedTargets = targets.slice(0, MAX_SITES_PER_RUN);
 
   for (const site of limitedTargets) {

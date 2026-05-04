@@ -28,6 +28,7 @@ export default function UsersPage() {
   const [targetSiteId, setTargetSiteId] = useState("");
 
   const [saving, setSaving] = useState(false);
+  const [changingId, setChangingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -120,6 +121,57 @@ export default function UsersPage() {
     [accesses],
   );
 
+  const handleChangeRole = async (access: Access, nextRole: "admin" | "viewer") => {
+    setChangingId(access.id);
+    setError("");
+    setSuccess("");
+
+    const { error: invokeError } = await supabase.functions.invoke("manage-user-site-access", {
+      body: {
+        userId: access.user_id,
+        siteId: access.sites?.id,
+        action: "set-role",
+        role: nextRole,
+      },
+    });
+
+    if (invokeError) {
+      setChangingId(null);
+      setError(`권한 변경 실패: ${invokeError.message}`);
+      return;
+    }
+
+    await reload();
+    setChangingId(null);
+    setSuccess("권한이 변경되었습니다.");
+  };
+
+  const handleRemoveAccess = async (access: Access) => {
+    if (!confirm("이 사용자의 해당 사이트 권한을 제거할까요?")) return;
+
+    setChangingId(access.id);
+    setError("");
+    setSuccess("");
+
+    const { error: invokeError } = await supabase.functions.invoke("manage-user-site-access", {
+      body: {
+        userId: access.user_id,
+        siteId: access.sites?.id,
+        action: "remove",
+      },
+    });
+
+    if (invokeError) {
+      setChangingId(null);
+      setError(`권한 제거 실패: ${invokeError.message}`);
+      return;
+    }
+
+    await reload();
+    setChangingId(null);
+    setSuccess("권한이 제거되었습니다.");
+  };
+
   if (checking) {
     return <div className="text-sm text-slate-500 py-8">권한 확인 중...</div>;
   }
@@ -174,7 +226,7 @@ export default function UsersPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-[#d6e8ff]/70">
-              {["사용자ID", "사이트", "역할", "부여일"].map((h, i) => (
+              {["사용자ID", "사이트", "역할", "부여일", "관리"].map((h, i) => (
                 <th
                   key={i}
                   className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider"
@@ -187,7 +239,7 @@ export default function UsersPage() {
           <tbody className="divide-y divide-[#d6e8ff]/70">
             {accesses.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">
                   권한 데이터가 없습니다
                 </td>
               </tr>
@@ -209,6 +261,24 @@ export default function UsersPage() {
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-500">
                     {new Date(a.granted_at).toLocaleDateString("ko")}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleChangeRole(a, a.role === "admin" ? "viewer" : "admin")}
+                        disabled={changingId === a.id || !a.sites?.id}
+                        className="px-2 py-1 text-xs rounded-md border border-[#c8def8] text-slate-700 hover:bg-blue-50 disabled:opacity-50"
+                      >
+                        {a.role === "admin" ? "뷰어로 변경" : "관리자로 변경"}
+                      </button>
+                      <button
+                        onClick={() => handleRemoveAccess(a)}
+                        disabled={changingId === a.id || !a.sites?.id}
+                        className="px-2 py-1 text-xs rounded-md border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        권한 제거
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

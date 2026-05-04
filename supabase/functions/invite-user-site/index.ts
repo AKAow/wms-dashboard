@@ -11,6 +11,40 @@ type InvitePayload = {
   siteId: string;
 };
 
+function resolveRedirectTo(): string {
+  const base =
+    Deno.env.get("DASHBOARD_URL") ||
+    Deno.env.get("NEXT_PUBLIC_DASHBOARD_URL") ||
+    "https://wms-dashboard-ckn.pages.dev";
+
+  return `${base.replace(/\/$/, "")}/auth/callback`;
+}
+
+async function syncUserGlobalRole(admin: ReturnType<typeof createClient>, userId: string) {
+  const { data: roles, error: roleErr } = await admin
+    .from("user_site_access")
+    .select("role")
+    .eq("user_id", userId);
+
+  if (roleErr) throw new Error(roleErr.message);
+
+  const isAdmin = (roles ?? []).some((r) => r.role === "admin");
+  const nextRole = isAdmin ? "admin" : "viewer";
+
+  const { data: userData, error: getUserErr } = await admin.auth.admin.getUserById(userId);
+  if (getUserErr) throw new Error(getUserErr.message);
+
+  const raw = (userData.user?.user_metadata ?? {}) as Record<string, unknown>;
+  const { error: updateErr } = await admin.auth.admin.updateUserById(userId, {
+    user_metadata: {
+      ...raw,
+      role: nextRole,
+    },
+  });
+
+  if (updateErr) throw new Error(updateErr.message);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", {
@@ -32,7 +66,9 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey);
 
-    const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email);
+    const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
+      redirectTo: resolveRedirectTo(),
+    });
     if (inviteError) {
       return new Response(JSON.stringify({ error: inviteError.message }), { status: 400 });
     }
@@ -57,6 +93,8 @@ Deno.serve(async (req) => {
     if (upsertError) {
       return new Response(JSON.stringify({ error: upsertError.message }), { status: 400 });
     }
+
+    await syncUserGlobalRole(admin, userId);
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
