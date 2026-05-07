@@ -1159,7 +1159,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
               <div className="p-4 border-b border-[#d6e8ff] flex items-center gap-2 text-slate-900 text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />일별 10분 평균 데이터</div>
               <div className="overflow-x-auto overflow-y-visible">
-                <table className="w-full min-w-[2400px]">
+                <table className="w-full min-w-[2400px] border-separate border-spacing-0">
                   <thead>
                     <tr className="border-b border-[#d6e8ff]/70">
                       <th className="sticky left-0 z-20 bg-white text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">센서</th>
@@ -1249,7 +1249,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
               <div className="p-4 border-b border-[#d6e8ff] flex items-center gap-2 text-slate-900 text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />월별 통계 데이터</div>
               <div className="overflow-x-auto overflow-y-visible">
-                <table className="w-full min-w-[2200px]">
+                <table className="w-full min-w-[2200px] border-separate border-spacing-0">
                   <thead>
                     <tr className="border-b border-[#d6e8ff]/70">
                       <th className="sticky left-0 z-20 bg-white text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">센서</th>
