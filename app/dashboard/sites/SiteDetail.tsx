@@ -839,6 +839,16 @@ export default function SiteDetail({ site }: { site: Site }) {
     return { measurementPct, modelPct, mcpPct, totalPct, p75p50, p90p50 };
   }, [metMastQuality.grade, mcpLiteSummary.confidence]);
 
+  const simulationMeta = useMemo(() => {
+    const assumptions = DEFAULT_SIMULATION_ASSUMPTIONS;
+    const totalLossPct = assumptions.availabilityLossPct + assumptions.electricalLossPct + assumptions.wakeLossPct + assumptions.curtailmentLossPct + assumptions.icingLossPct + assumptions.otherLossPct + Math.round(AGE_LOSS_MAP[turbineAgeBand] * 100);
+    return {
+      version: "prebankable-v1",
+      generatedAt: new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }).format(new Date()),
+      totalLossPct,
+    };
+  }, [turbineAgeBand]);
+
   const simulationAssessment = useMemo(() => {
     const coverage = monthCoverage;
     const wind = simulationSummary.avgWind;
@@ -1361,6 +1371,11 @@ export default function SiteDetail({ site }: { site: Site }) {
               <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">총합(제곱합) ±{toFixedOrDash(uncertaintyBreakdown.totalPct, 1)}%</div>
               <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">참고 비율 P75/P50 {toFixedOrDash(uncertaintyBreakdown.p75p50, 2)} · P90/P50 {toFixedOrDash(uncertaintyBreakdown.p90p50, 2)}</div>
             </div>
+          </div>
+
+          <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-700">
+            <div><b>보고서 메타</b>: {simulationMeta.version} · 생성 {simulationMeta.generatedAt}</div>
+            <div className="mt-1 text-[11px] text-slate-600">가정 총손실률(기본+연식): {simulationMeta.totalLossPct}% · MCP-lite {toFixedOrDash(mcpLiteSummary.factor, 3)}</div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
