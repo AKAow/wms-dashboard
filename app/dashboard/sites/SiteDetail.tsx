@@ -1383,8 +1383,8 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="mt-1 text-[12px] leading-5 text-slate-700">{simulationAdvice.summary}</div>
           </div>
 
-          <div className="sticky top-2 z-20 overflow-x-auto">
-            <div className="grid grid-cols-3 gap-2 min-w-[1080px]">
+          <div className="overflow-x-auto">
+            <div className="grid grid-cols-[repeat(3,minmax(320px,1fr))] gap-2 min-w-[980px]">
             <div className="min-w-0 rounded-lg border border-[#d6e8ff] bg-white/70 p-2.5">
               <div className="text-slate-500 text-xs mb-2">핵심 지표</div>
               <div className="space-y-2 text-xs">
