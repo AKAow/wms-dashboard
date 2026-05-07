@@ -1392,10 +1392,52 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
           </div>
 
+          <div className="sticky top-2 z-20 rounded-lg border border-[#d6e8ff] bg-white/95 backdrop-blur p-3 space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <label className="space-y-1">
+                <span className="text-xs text-slate-500 inline-flex items-center gap-2 whitespace-nowrap">터빈 연식 구간 <b className="text-slate-700">손실률 {Math.round(simulationSummary.loss * 100)}%</b></span>
+                <select value={turbineAgeBand} onChange={(e) => setTurbineAgeBand(e.target.value as "0-5" | "6-10" | "11-15" | "16+")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
+                  <option value="0-5">0~5년 (12%)</option>
+                  <option value="6-10">6~10년 (15%)</option>
+                  <option value="11-15">11~15년 (18%)</option>
+                  <option value="16+">16년 이상 (22%)</option>
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-slate-500">표준 터빈 시나리오</span>
+                <select value={String(turbineMw)} onChange={(e) => setTurbineMw(Number(e.target.value))} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
+                  {STANDARD_TURBINE_SCENARIOS.map((s) => (
+                    <option key={s.key} value={s.ratedMw}>{s.name} · {s.ratedMw.toFixed(1)}MW · IEC {s.iecClass}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="flex flex-wrap items-end gap-2 text-xs">
+              <label className="space-y-1">
+                <span className="text-slate-500">적용기간</span>
+                <select value={simPreset} onChange={(e) => setSimPreset(e.target.value as "3M" | "6M" | "12M" | "custom")} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800">
+                  <option value="3M">3M</option>
+                  <option value="6M">6M</option>
+                  <option value="12M">12M</option>
+                  <option value="custom">커스텀</option>
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-slate-500">시작</span>
+                <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.start} onChange={(e) => setSimStartDate(e.target.value)} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
+              </label>
+              <label className="space-y-1">
+                <span className="text-slate-500">종료</span>
+                <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.end} onChange={(e) => setSimEndDate(e.target.value)} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
+              </label>
+            </div>
+          </div>
+
           <div className="flex flex-col md:flex-row gap-2 md:items-center">
-            <div className={`rounded-lg border px-3 py-2 text-sm inline-flex items-center gap-2 ${simulationAssessment.tone}`}>
-              <b>사업성 평가: {simulationAssessment.grade}</b>
-              <span className="text-xs">({simulationAssessment.reason})</span>
+            <div className="inline-flex items-center gap-2 text-sm">
+              <span className="text-slate-600">사업성 평가</span>
+              <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${simulationAssessment.tone}`}>{simulationAssessment.grade}</span>
+              <span className="text-xs text-slate-500">{simulationAssessment.reason}</span>
             </div>
             <div className="rounded-lg border border-[#d6e8ff] bg-white/70 px-3 py-2 text-xs text-slate-700 space-y-1.5">
               <div><b>AI 조언</b>: {simulationAdvice.summary}</div>
@@ -1449,60 +1491,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="mt-1 text-[11px] text-slate-600">가정 총손실률(기본+연식): {simulationMeta.totalLossPct}% · MCP-lite {toFixedOrDash(mcpLiteSummary.factor, 3)}</div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <label className="space-y-1">
-              <span className="text-xs text-slate-500 inline-flex items-center gap-2 whitespace-nowrap">터빈 연식 구간 <b className="text-slate-700">손실률 {Math.round(simulationSummary.loss * 100)}%</b></span>
-              <select value={turbineAgeBand} onChange={(e) => setTurbineAgeBand(e.target.value as "0-5" | "6-10" | "11-15" | "16+")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
-                <option value="0-5">0~5년 (12%)</option>
-                <option value="6-10">6~10년 (15%)</option>
-                <option value="11-15">11~15년 (18%)</option>
-                <option value="16+">16년 이상 (22%)</option>
-              </select>
-            </label>
-            <label className="space-y-1">
-              <span className="text-xs text-slate-500">표준 터빈 시나리오</span>
-              <select value={String(turbineMw)} onChange={(e) => setTurbineMw(Number(e.target.value))} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
-                {STANDARD_TURBINE_SCENARIOS.map((s) => (
-                  <option key={s.key} value={s.ratedMw}>{s.name} · {s.ratedMw.toFixed(1)}MW · IEC {s.iecClass}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-2">
-            <div className="space-y-1">
-              <span className="text-xs text-slate-500">표시 기준</span>
-              <div className="seg">
-                {([
-                  { key: "daily", label: "일별" },
-                  { key: "weekly", label: "주별" },
-                  { key: "monthly", label: "월별" },
-                ] as const).map((p) => (
-                  <span key={p.key} className={simPeriod === p.key ? "on" : ""} onClick={() => setSimPeriod(p.key)}>{p.label}</span>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-end gap-2 text-xs">
-              <label className="space-y-1">
-                <span className="text-slate-500">적용기간</span>
-                <select value={simPreset} onChange={(e) => setSimPreset(e.target.value as "3M" | "6M" | "12M" | "custom")} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800">
-                  <option value="3M">3M</option>
-                  <option value="6M">6M</option>
-                  <option value="12M">12M</option>
-                  <option value="custom">커스텀</option>
-                </select>
-              </label>
-              <label className="space-y-1">
-                <span className="text-slate-500">시작</span>
-                <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.start} onChange={(e) => setSimStartDate(e.target.value)} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-slate-500">종료</span>
-                <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.end} onChange={(e) => setSimEndDate(e.target.value)} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
-              </label>
-            </div>
-          </div>
+          
 
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -1542,10 +1531,10 @@ export default function SiteDetail({ site }: { site: Site }) {
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} />
               <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" MWh" />
               <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
-              <Legend wrapperStyle={{ fontSize: "12px" }} />
+              <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: "12px" }} />
               <Line type="monotone" dataKey="p50" name="P50" stroke="#2f80ed" dot={false} strokeWidth={2.2} />
-              <Line type="monotone" dataKey="p75" name="P75" stroke="#10b981" dot={false} strokeWidth={1.8} />
-              <Line type="monotone" dataKey="p90" name="P90" stroke="#f59e0b" dot={false} strokeWidth={1.8} />
+              <Line type="monotone" dataKey="p75" name="P75" stroke="#10b981" dot={false} strokeWidth={1.8} strokeDasharray="6 4" />
+              <Line type="monotone" dataKey="p90" name="P90" stroke="#f59e0b" dot={false} strokeWidth={1.8} strokeDasharray="2 3" />
             </LineChart>
           </ResponsiveContainer>
 
@@ -1570,14 +1559,14 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <td className="px-2 py-2 text-right">{toFixedOrDash(simulationSummary.avgP90, 1)}</td>
                   <td className="px-2 py-2 text-right">{Math.round(simulationSummary.loss * 100)}%</td>
                 </tr>
-                {simulationRows.map((r) => (
-                  <tr key={r.label} className="border-b border-[#e6f0ff] text-slate-700">
-                    <td className="px-2 py-2">{r.label}</td>
-                    <td className="px-2 py-2 text-right">{toFixedOrDash(r.wind, 2)} m/s</td>
-                    <td className="px-2 py-2 text-right">{toFixedOrDash(r.p50, 1)}</td>
-                    <td className="px-2 py-2 text-right">{toFixedOrDash(r.p75, 1)}</td>
-                    <td className="px-2 py-2 text-right">{toFixedOrDash(r.p90, 1)}</td>
-                    <td className="px-2 py-2 text-right">{Math.round(simulationSummary.loss * 100)}%</td>
+                {simulationRows.map((r, i) => (
+                  <tr key={r.label} className={`border-b border-[#e6f0ff] text-slate-700 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
+                    <td className="px-2 py-1.5">{r.label}</td>
+                    <td className="px-2 py-1.5 text-right">{toFixedOrDash(r.wind, 2)} m/s</td>
+                    <td className="px-2 py-1.5 text-right">{toFixedOrDash(r.p50, 1)}</td>
+                    <td className="px-2 py-1.5 text-right">{toFixedOrDash(r.p75, 1)}</td>
+                    <td className="px-2 py-1.5 text-right">{toFixedOrDash(r.p90, 1)}</td>
+                    <td className="px-2 py-1.5 text-right">{Math.round(simulationSummary.loss * 100)}%</td>
                   </tr>
                 ))}
               </tbody>
