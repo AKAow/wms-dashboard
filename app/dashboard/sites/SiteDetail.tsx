@@ -1455,49 +1455,15 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
           </div>
 
-          <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3">
-            <div className="text-xs text-slate-500 mb-2">풍황 데이터 신뢰도 (사전타당성 기준)</div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
-              <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2">
-                <div className="text-slate-500">신뢰도 등급</div>
-                <div className="font-semibold text-slate-900">{metMastQuality.grade}</div>
-              </div>
-              <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2">
-                <div className="text-slate-500">월 커버리지</div>
-                <div className="font-semibold text-slate-900">{metMastQuality.coverage}%</div>
-              </div>
-              <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2">
-                <div className="text-slate-500">고품질 일비율</div>
-                <div className="font-semibold text-slate-900">{metMastQuality.highQualityPct}%</div>
-              </div>
-              <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2">
-                <div className="text-slate-500">일 평균 포인트</div>
-                <div className="font-semibold text-slate-900">{toFixedOrDash(metMastQuality.avgPoints, 0)}</div>
-              </div>
+          <details className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-700">
+            <summary className="cursor-pointer font-semibold text-slate-900">근거 상세 보기</summary>
+            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">MCP-lite: {toFixedOrDash(mcpLiteSummary.factor, 3)} ({mcpLiteSummary.confidence}) · 최근 {toFixedOrDash(mcpLiteSummary.shortAvg, 2)} / 장기 {toFixedOrDash(mcpLiteSummary.longAvg, 2)} m/s</div>
+              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">불확실성(계측/모델/MCP): ±{toFixedOrDash(uncertaintyBreakdown.measurementPct, 1)} / ±{toFixedOrDash(uncertaintyBreakdown.modelPct, 1)} / ±{toFixedOrDash(uncertaintyBreakdown.mcpPct, 1)}%</div>
+              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">총합 불확실성: ±{toFixedOrDash(uncertaintyBreakdown.totalPct, 1)}% · P75/P50 {toFixedOrDash(uncertaintyBreakdown.p75p50, 2)} · P90/P50 {toFixedOrDash(uncertaintyBreakdown.p90p50, 2)}</div>
+              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">메타: {simulationMeta.version} · {simulationMeta.generatedAt} · 총손실률 {simulationMeta.totalLossPct}%</div>
             </div>
-            <div className="mt-2 text-[11px] text-slate-600">판정: {metMastQuality.reason} · 실발전량 기반 백테스트는 운영 이후 단계에서 적용</div>
-          </div>
-
-          <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-700">
-            <div><b>MCP-lite 보정계수</b>: {toFixedOrDash(mcpLiteSummary.factor, 3)} ({mcpLiteSummary.confidence})</div>
-            <div className="text-[11px] text-slate-600 mt-1">최근 평균풍속 {toFixedOrDash(mcpLiteSummary.shortAvg, 2)} m/s, 장기 평균풍속 {toFixedOrDash(mcpLiteSummary.longAvg, 2)} m/s 기반 단순 보정</div>
-          </div>
-
-          <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-700">
-            <div className="font-semibold text-slate-900 mb-2">P50/P75/P90 근거(사전타당성)</div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">계측 불확실성 ±{toFixedOrDash(uncertaintyBreakdown.measurementPct, 1)}%</div>
-              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">모델 불확실성 ±{toFixedOrDash(uncertaintyBreakdown.modelPct, 1)}%</div>
-              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">MCP 불확실성 ±{toFixedOrDash(uncertaintyBreakdown.mcpPct, 1)}%</div>
-              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">총합(제곱합) ±{toFixedOrDash(uncertaintyBreakdown.totalPct, 1)}%</div>
-              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">참고 비율 P75/P50 {toFixedOrDash(uncertaintyBreakdown.p75p50, 2)} · P90/P50 {toFixedOrDash(uncertaintyBreakdown.p90p50, 2)}</div>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-700">
-            <div><b>보고서 메타</b>: {simulationMeta.version} · 생성 {simulationMeta.generatedAt}</div>
-            <div className="mt-1 text-[11px] text-slate-600">가정 총손실률(기본+연식): {simulationMeta.totalLossPct}% · MCP-lite {toFixedOrDash(mcpLiteSummary.factor, 3)}</div>
-          </div>
+          </details>
 
           
 
@@ -1527,11 +1493,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
           </div>
 
-          <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-600 space-y-1">
-            <div><b>P50</b>: 기준 시나리오에서 초과 달성 확률이 약 50%인 중간값 추정치</div>
-            <div><b>P75</b>: 보수적 관점의 추정치(초과 달성 확률 약 75%)</div>
-            <div><b>P90</b>: 매우 보수적 추정치(초과 달성 확률 약 90%)</div>
-          </div>
+          
 
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={simulationRows}>
