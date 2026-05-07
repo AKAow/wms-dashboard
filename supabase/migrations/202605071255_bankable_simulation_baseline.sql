@@ -18,7 +18,7 @@ create table if not exists public.turbine_scenarios (
 
 create table if not exists public.simulation_assumption_sets (
   id uuid primary key default gen_random_uuid(),
-  site_id uuid references public.sites(id) on delete cascade,
+  site_id uuid,
   name text not null,
   availability_loss_pct numeric(5,2) not null default 6,
   electrical_loss_pct numeric(5,2) not null default 3,
@@ -34,7 +34,7 @@ create table if not exists public.simulation_assumption_sets (
 
 create table if not exists public.energy_actual_daily (
   id uuid primary key default gen_random_uuid(),
-  site_id uuid not null references public.sites(id) on delete cascade,
+  site_id uuid not null,
   date date not null,
   actual_mwh numeric(12,4) not null,
   source text,
@@ -44,7 +44,7 @@ create table if not exists public.energy_actual_daily (
 
 create table if not exists public.simulation_backtest_daily (
   id uuid primary key default gen_random_uuid(),
-  site_id uuid not null references public.sites(id) on delete cascade,
+  site_id uuid not null,
   date date not null,
   turbine_scenario_id uuid references public.turbine_scenarios(id),
   assumption_set_id uuid references public.simulation_assumption_sets(id),
