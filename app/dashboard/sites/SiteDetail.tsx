@@ -18,7 +18,7 @@ const EXCEL_WIND_SPEED_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch
 const EXCEL_WIND_DIR_CHANNELS = ["ch13", "ch14", "ch15", "ch16"] as const;
 const EXCEL_ATMO_CHANNELS = ["ch17", "ch21", "ch22"] as const;
 const RIGHT_SUMMARY_CLASS = ["right-[216px]", "right-[144px]", "right-[72px]", "right-0"] as const;
-const RIGHT_SUMMARY_BG_CLASS = "bg-[#f8fbff]";
+const RIGHT_SUMMARY_BG_CLASS = "bg-[#f8fbff] shadow-[-1px_0_0_#d6e8ff_inset]";
 
 const EXCEL_SENSOR_META: Record<string, { description: string; height: string }> = {
   ch1: { description: "2 - NRG 40C Anem", height: "100m" },
@@ -1165,7 +1165,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                       <th className="sticky left-0 z-20 bg-white text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">센서</th>
                       <th className="sticky left-[200px] z-20 bg-white text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">높이</th>
                       {dailyExcelTable.timeLabels.map((t, i) => <th key={`${t}-${i}`} className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{t}</th>)}
-                      {['AVE', 'MAX', 'MIN', 'STD'].map((h, i) => <th key={h} className={`sticky ${RIGHT_SUMMARY_CLASS[i]} z-20 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] border-l border-[#d6e8ff] text-left px-2 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider`}>{h}</th>)}
+                      {['AVE', 'MAX', 'MIN', 'STD'].map((h, i) => <th key={h} className={`sticky ${RIGHT_SUMMARY_CLASS[i]} z-20 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] text-left px-2 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider`}>{h}</th>)}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#d6e8ff]/70">
@@ -1174,10 +1174,10 @@ export default function SiteDetail({ site }: { site: Site }) {
                         <td className="sticky left-0 z-10 bg-white px-4 py-2.5 w-[200px] min-w-[200px] text-xs text-slate-800 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch]}</td>
                         <td className="sticky left-[200px] z-10 bg-white px-3 py-2.5 w-[92px] min-w-[92px] text-xs text-slate-700 whitespace-nowrap border-r border-[#d6e8ff]">{EXCEL_SENSOR_META[row.ch]?.height ?? "-"}</td>
                         {row.values.map((v, i) => <td key={`${row.ch}-${i}`} className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(v, 2)}</td>)}
-                        <td className={`sticky right-[216px] z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] border-l border-[#d6e8ff] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.ave, 2)}</td>
-                        <td className={`sticky right-[144px] z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] border-l border-[#d6e8ff] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.max, 2)}</td>
-                        <td className={`sticky right-[72px] z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] border-l border-[#d6e8ff] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.min, 2)}</td>
-                        <td className={`sticky right-0 z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] border-l border-[#d6e8ff] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.std, 2)}</td>
+                        <td className={`sticky right-[216px] z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.ave, 2)}</td>
+                        <td className={`sticky right-[144px] z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.max, 2)}</td>
+                        <td className={`sticky right-[72px] z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.min, 2)}</td>
+                        <td className={`sticky right-0 z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.std, 2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1258,7 +1258,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                         <th key={d} className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{d}</th>
                       ))}
                       {['AVE', 'MAX', 'MIN', 'STD'].map((h, i) => (
-                        <th key={h} className={`sticky ${RIGHT_SUMMARY_CLASS[i]} z-20 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] border-l border-[#d6e8ff] text-left px-2 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider`}>{h}</th>
+                        <th key={h} className={`sticky ${RIGHT_SUMMARY_CLASS[i]} z-20 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] text-left px-2 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider`}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1270,10 +1270,10 @@ export default function SiteDetail({ site }: { site: Site }) {
                         {row.dayValues.map((v, i) => (
                           <td key={`${row.ch}-${i}`} className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(v, 2)}</td>
                         ))}
-                        <td className={`sticky right-[216px] z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] border-l border-[#d6e8ff] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.ave, 2)}</td>
-                        <td className={`sticky right-[144px] z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] border-l border-[#d6e8ff] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.max, 2)}</td>
-                        <td className={`sticky right-[72px] z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] border-l border-[#d6e8ff] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.min, 2)}</td>
-                        <td className={`sticky right-0 z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] border-l border-[#d6e8ff] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.std, 2)}</td>
+                        <td className={`sticky right-[216px] z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.ave, 2)}</td>
+                        <td className={`sticky right-[144px] z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.max, 2)}</td>
+                        <td className={`sticky right-[72px] z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.min, 2)}</td>
+                        <td className={`sticky right-0 z-10 ${RIGHT_SUMMARY_BG_CLASS} w-[72px] min-w-[72px] max-w-[72px] px-2 py-2.5 text-xs text-slate-700`}>{toFixedOrDash(row.std, 2)}</td>
                       </tr>
                     ))}
                   </tbody>
