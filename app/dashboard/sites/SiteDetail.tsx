@@ -895,6 +895,11 @@ export default function SiteDetail({ site }: { site: Site }) {
     };
   }, [simulationSummary, monthCoverage, turbineMw]);
 
+  const simulationConclusion = useMemo(() => {
+    const p90ratio = simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0;
+    return `현재 평가는 ${simulationAssessment.grade}이며, 데이터 커버리지 ${monthCoverage}%, P90/P50 ${toFixedOrDash(p90ratio, 2)} 기준으로 ${simulationAdvice.summary}`;
+  }, [simulationAssessment.grade, monthCoverage, simulationSummary.totalP50, simulationSummary.totalP90, simulationAdvice.summary]);
+
   const downloadPreFeasibilityReport = useCallback(() => {
     const wb = XLSX.utils.book_new();
     const rows = [
@@ -1366,6 +1371,26 @@ export default function SiteDetail({ site }: { site: Site }) {
             </button>
           </div>
           <p className="text-xs text-slate-600">연식 기반 손실률과 적용 구간을 선택해 P50/P75/P90 추정치를 계산합니다.</p>
+
+          <div className="rounded-lg border border-blue-200 bg-blue-50/70 p-3">
+            <div className="text-[11px] text-blue-700 mb-1">한 줄 결론</div>
+            <div className="text-sm text-slate-900 font-medium">{simulationConclusion}</div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2">
+              <div className="text-slate-500">신뢰도 등급</div><div className="font-semibold text-slate-900">{metMastQuality.grade}</div>
+            </div>
+            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2">
+              <div className="text-slate-500">누적 P50</div><div className="font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP50, 1)} MWh</div>
+            </div>
+            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2">
+              <div className="text-slate-500">P90/P50</div><div className="font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0, 2)}</div>
+            </div>
+            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2">
+              <div className="text-slate-500">월 커버리지</div><div className="font-semibold text-slate-900">{monthCoverage}%</div>
+            </div>
+          </div>
 
           <div className="flex flex-col md:flex-row gap-2 md:items-center">
             <div className={`rounded-lg border px-3 py-2 text-sm inline-flex items-center gap-2 ${simulationAssessment.tone}`}>
