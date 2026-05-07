@@ -1383,8 +1383,8 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="mt-1 text-[12px] leading-5 text-slate-700">{simulationAdvice.summary}</div>
           </div>
 
-          <div className="sticky top-2 z-20 grid grid-cols-1 md:grid-cols-3 gap-2">
-            <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3">
+          <div className="sticky top-2 z-20 grid grid-cols-3 gap-2">
+            <div className="min-w-0 rounded-lg border border-[#d6e8ff] bg-white/70 p-2.5">
               <div className="text-slate-500 text-xs mb-2">핵심 지표</div>
               <div className="space-y-2 text-xs">
                 <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2"><div className="text-slate-500 tracking-wide">신뢰도 등급</div><div className="font-semibold text-slate-900 mt-0.5">{metMastQuality.grade}</div></div>
@@ -1394,7 +1394,7 @@ export default function SiteDetail({ site }: { site: Site }) {
               </div>
             </div>
 
-            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3">
+            <div className="min-w-0 rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-2.5">
               <div className="text-slate-500 text-xs mb-2">터빈 설정</div>
               <div className="space-y-2 text-sm">
                 <label className="space-y-1 block">
@@ -1417,7 +1417,7 @@ export default function SiteDetail({ site }: { site: Site }) {
               </div>
             </div>
 
-            <div className="rounded-lg border border-[#d6e8ff] bg-white/60 p-3">
+            <div className="min-w-0 rounded-lg border border-[#d6e8ff] bg-white/60 p-2.5">
               <div className="text-slate-500 text-xs mb-2">기간/표시 설정</div>
               <div className="space-y-2 text-sm">
                 <label className="space-y-1 block">
