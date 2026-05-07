@@ -1414,6 +1414,14 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
             <div className="flex flex-wrap items-end gap-2 text-xs">
               <label className="space-y-1">
+                <span className="text-slate-500">표시기준</span>
+                <select value={simPeriod} onChange={(e) => setSimPeriod(e.target.value as "daily" | "weekly" | "monthly")} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800">
+                  <option value="daily">일별</option>
+                  <option value="weekly">주별</option>
+                  <option value="monthly">월별</option>
+                </select>
+              </label>
+              <label className="space-y-1">
                 <span className="text-slate-500">적용기간</span>
                 <select value={simPreset} onChange={(e) => setSimPreset(e.target.value as "3M" | "6M" | "12M" | "custom")} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800">
                   <option value="3M">3M</option>
