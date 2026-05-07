@@ -829,6 +829,16 @@ export default function SiteDetail({ site }: { site: Site }) {
     return { grade, coverage, highQualityPct, avgPoints, reason };
   }, [dailyStats, monthCoverage]);
 
+  const uncertaintyBreakdown = useMemo(() => {
+    const measurementPct = metMastQuality.grade === "A" ? 6 : metMastQuality.grade === "B" ? 9 : 12;
+    const modelPct = 8;
+    const mcpPct = mcpLiteSummary.confidence === "high" ? 4 : mcpLiteSummary.confidence === "medium" ? 6 : 8;
+    const totalPct = Math.sqrt(measurementPct ** 2 + modelPct ** 2 + mcpPct ** 2);
+    const p90p50 = Math.max(0.7, 1 - 1.28 * (totalPct / 100));
+    const p75p50 = Math.max(0.8, 1 - 0.67 * (totalPct / 100));
+    return { measurementPct, modelPct, mcpPct, totalPct, p75p50, p90p50 };
+  }, [metMastQuality.grade, mcpLiteSummary.confidence]);
+
   const simulationAssessment = useMemo(() => {
     const coverage = monthCoverage;
     const wind = simulationSummary.avgWind;
@@ -1340,6 +1350,17 @@ export default function SiteDetail({ site }: { site: Site }) {
           <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-700">
             <div><b>MCP-lite 보정계수</b>: {toFixedOrDash(mcpLiteSummary.factor, 3)} ({mcpLiteSummary.confidence})</div>
             <div className="text-[11px] text-slate-600 mt-1">최근 평균풍속 {toFixedOrDash(mcpLiteSummary.shortAvg, 2)} m/s, 장기 평균풍속 {toFixedOrDash(mcpLiteSummary.longAvg, 2)} m/s 기반 단순 보정</div>
+          </div>
+
+          <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-700">
+            <div className="font-semibold text-slate-900 mb-2">P50/P75/P90 근거(사전타당성)</div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">계측 불확실성 ±{toFixedOrDash(uncertaintyBreakdown.measurementPct, 1)}%</div>
+              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">모델 불확실성 ±{toFixedOrDash(uncertaintyBreakdown.modelPct, 1)}%</div>
+              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">MCP 불확실성 ±{toFixedOrDash(uncertaintyBreakdown.mcpPct, 1)}%</div>
+              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">총합(제곱합) ±{toFixedOrDash(uncertaintyBreakdown.totalPct, 1)}%</div>
+              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">참고 비율 P75/P50 {toFixedOrDash(uncertaintyBreakdown.p75p50, 2)} · P90/P50 {toFixedOrDash(uncertaintyBreakdown.p90p50, 2)}</div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
