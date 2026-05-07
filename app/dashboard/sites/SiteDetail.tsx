@@ -9,6 +9,7 @@ import type { Site, DailyStat, Measurement } from "@/lib/types";
 import { CHANNEL_LABELS } from "@/lib/types";
 import { DEFAULT_SIMULATION_ASSUMPTIONS, MET_MAST_GRADE_RULES, STANDARD_TURBINE_SCENARIOS } from "@/lib/simulation-constants";
 import { estimateDailyEnergyMwh, estimatePValuesFromP50, getNearestScenarioByMw } from "@/lib/simulation-engine";
+import { calculateMcpLiteFactor } from "@/lib/mcp-lite";
 
 type Tab = "overview" | "daily" | "monthly" | "simulation";
 
@@ -714,6 +715,14 @@ export default function SiteDetail({ site }: { site: Site }) {
     const scenario = getNearestScenarioByMw(turbineMw);
     const ageLossPct = Math.round(AGE_LOSS_MAP[turbineAgeBand] * 100);
 
+    const longWindRows = dailyStats
+      .filter((r) => r.channel === "ch1" && typeof r.avg_value === "number")
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-365)
+      .map((r) => r.avg_value as number);
+    const recentWindRows = baseRows.map((r) => r.avg_value as number);
+    const mcpLite = calculateMcpLiteFactor({ recentWind: recentWindRows, longWind: longWindRows });
+
     return baseRows.map((r) => {
       const v = r.avg_value as number;
       const uncertaintyPct = r.data_count >= 100 ? 8 : r.data_count >= 50 ? 12 : 16;
@@ -725,10 +734,21 @@ export default function SiteDetail({ site }: { site: Site }) {
         assumptions: DEFAULT_SIMULATION_ASSUMPTIONS,
         extraLossPct: ageLossPct,
       });
-      const { p50, p75, p90 } = estimatePValuesFromP50(p50raw, uncertaintyPct);
+      const p50adj = p50raw * mcpLite.factor;
+      const { p50, p75, p90 } = estimatePValuesFromP50(p50adj, uncertaintyPct);
       return { date: r.date, wind: v, p50, p75, p90 };
     });
   }, [dailyStats, effectiveSimDates, turbineAgeBand, turbineMw, tempByDate, pressureByDate]);
+
+  const mcpLiteSummary = useMemo(() => {
+    const longWindRows = dailyStats
+      .filter((r) => r.channel === "ch1" && typeof r.avg_value === "number")
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-365)
+      .map((r) => r.avg_value as number);
+    const recentWindRows = simulationDailyRows.map((r) => r.wind);
+    return calculateMcpLiteFactor({ recentWind: recentWindRows, longWind: longWindRows });
+  }, [dailyStats, simulationDailyRows]);
 
   const simulationRows = useMemo(() => {
     if (simPeriod === "daily") {
@@ -1315,6 +1335,11 @@ export default function SiteDetail({ site }: { site: Site }) {
               </div>
             </div>
             <div className="mt-2 text-[11px] text-slate-600">판정: {metMastQuality.reason} · 실발전량 기반 백테스트는 운영 이후 단계에서 적용</div>
+          </div>
+
+          <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-700">
+            <div><b>MCP-lite 보정계수</b>: {toFixedOrDash(mcpLiteSummary.factor, 3)} ({mcpLiteSummary.confidence})</div>
+            <div className="text-[11px] text-slate-600 mt-1">최근 평균풍속 {toFixedOrDash(mcpLiteSummary.shortAvg, 2)} m/s, 장기 평균풍속 {toFixedOrDash(mcpLiteSummary.longAvg, 2)} m/s 기반 단순 보정</div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
