@@ -1,0 +1,91 @@
+import type { SimulationAssumptions, TurbineScenario } from "./simulation-types";
+
+export const DEFAULT_SIMULATION_ASSUMPTIONS: SimulationAssumptions = {
+  availabilityLossPct: 6,
+  electricalLossPct: 3,
+  wakeLossPct: 5,
+  curtailmentLossPct: 2,
+  icingLossPct: 0,
+  otherLossPct: 1,
+};
+
+export const BACKTEST_GRADE_RULES = {
+  A: { maxMapePct: 8 },
+  B: { maxMapePct: 12 },
+} as const;
+
+// NOTE: 템플릿 커브입니다. 뱅커블 제출 전에는 프로젝트별 후보 기종 실커브로 대체 필요.
+export const STANDARD_TURBINE_SCENARIOS: TurbineScenario[] = [
+  {
+    key: "S-3.6-IEC3",
+    name: "Standard S 3.6MW (IEC III)",
+    ratedMw: 3.6,
+    iecClass: "III",
+    cutIn: 3,
+    ratedSpeed: 12,
+    cutOut: 25,
+    hubHeightM: 100,
+    rotorDiameterM: 130,
+    powerCurve: [
+      { ws: 3, kw: 0 },
+      { ws: 4, kw: 120 },
+      { ws: 5, kw: 320 },
+      { ws: 6, kw: 620 },
+      { ws: 7, kw: 1020 },
+      { ws: 8, kw: 1550 },
+      { ws: 9, kw: 2200 },
+      { ws: 10, kw: 2900 },
+      { ws: 11, kw: 3400 },
+      { ws: 12, kw: 3600 },
+      { ws: 25, kw: 0 },
+    ],
+  },
+  {
+    key: "M-4.2-IEC2",
+    name: "Standard M 4.2MW (IEC II)",
+    ratedMw: 4.2,
+    iecClass: "II",
+    cutIn: 3,
+    ratedSpeed: 12,
+    cutOut: 25,
+    hubHeightM: 105,
+    rotorDiameterM: 145,
+    powerCurve: [
+      { ws: 3, kw: 0 },
+      { ws: 4, kw: 140 },
+      { ws: 5, kw: 380 },
+      { ws: 6, kw: 740 },
+      { ws: 7, kw: 1220 },
+      { ws: 8, kw: 1840 },
+      { ws: 9, kw: 2580 },
+      { ws: 10, kw: 3350 },
+      { ws: 11, kw: 3950 },
+      { ws: 12, kw: 4200 },
+      { ws: 25, kw: 0 },
+    ],
+  },
+  {
+    key: "L-5.0-IEC1_2",
+    name: "Standard L 5.0MW (IEC I/II)",
+    ratedMw: 5,
+    iecClass: "I/II",
+    cutIn: 3,
+    ratedSpeed: 12,
+    cutOut: 25,
+    hubHeightM: 110,
+    rotorDiameterM: 155,
+    powerCurve: [
+      { ws: 3, kw: 0 },
+      { ws: 4, kw: 170 },
+      { ws: 5, kw: 460 },
+      { ws: 6, kw: 900 },
+      { ws: 7, kw: 1480 },
+      { ws: 8, kw: 2240 },
+      { ws: 9, kw: 3120 },
+      { ws: 10, kw: 4020 },
+      { ws: 11, kw: 4700 },
+      { ws: 12, kw: 5000 },
+      { ws: 25, kw: 0 },
+    ],
+  },
+];

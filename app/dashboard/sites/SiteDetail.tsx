@@ -7,13 +7,17 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import * as XLSX from "xlsx";
 import type { Site, DailyStat, Measurement } from "@/lib/types";
 import { CHANNEL_LABELS } from "@/lib/types";
+import { DEFAULT_SIMULATION_ASSUMPTIONS } from "@/lib/simulation-constants";
+import { estimateDailyEnergyMwh, estimatePValuesFromP50, getNearestScenarioByMw } from "@/lib/simulation-engine";
+import { calculateBacktestMetrics } from "@/lib/backtest-metrics";
 
 type Tab = "overview" | "daily" | "monthly" | "simulation";
 
-const EXCEL_DISPLAY_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"] as const;
-const EXCEL_WIND_SPEED_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"] as const;
+const EXCEL_DISPLAY_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7", "ch8", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"] as const;
+const EXCEL_WIND_SPEED_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7", "ch8"] as const;
 const EXCEL_WIND_DIR_CHANNELS = ["ch13", "ch14", "ch15", "ch16"] as const;
 const EXCEL_ATMO_CHANNELS = ["ch17", "ch21", "ch22"] as const;
+const RIGHT_SUMMARY_CLASS = ["right-[216px]", "right-[144px]", "right-[72px]", "right-0"] as const;
 
 const EXCEL_SENSOR_META: Record<string, { description: string; height: string }> = {
   ch1: { description: "2 - NRG 40C Anem", height: "100m" },
@@ -21,7 +25,9 @@ const EXCEL_SENSOR_META: Record<string, { description: string; height: string }>
   ch3: { description: "4 - NRG 40C Anem", height: "80m" },
   ch4: { description: "5 - NRG 40C Anem", height: "80m" },
   ch5: { description: "6 - NRG 40C Anem", height: "60m" },
+  ch6: { description: "6S - NRG 40C Anem", height: "60m" },
   ch7: { description: "7 - NRG 40C Anem", height: "40m" },
+  ch8: { description: "7S - NRG 40C Anem", height: "40m" },
   ch13: { description: "13 - NRG 200M Vane", height: "97m" },
   ch14: { description: "14 - NRG 200M Vane", height: "77m" },
   ch15: { description: "15 - NRG 200M Vane", height: "57m" },
@@ -36,7 +42,9 @@ const CHART_COLORS: Record<string, string> = {
   ch3: "#8b5cf6",
   ch4: "#ec4899",
   ch5: "#22c55e",
+  ch6: "#0ea5e9",
   ch7: "#14b8a6",
+  ch8: "#6366f1",
   ch13: "#f59e0b",
   ch14: "#f97316",
   ch15: "#eab308",
@@ -45,6 +53,7 @@ const CHART_COLORS: Record<string, string> = {
   ch21: "#10b981",
   ch22: "#ef4444",
 };
+
 
 const AGE_LOSS_MAP: Record<"0-5" | "6-10" | "11-15" | "16+", number> = {
   "0-5": 0.12,
@@ -98,6 +107,15 @@ const toKSTDateOnly = (timestamp: string) => {
 const toFixedOrDash = (value: number | null | undefined, digits = 2) =>
   typeof value === "number" ? value.toFixed(digits) : "-";
 
+const trendLabel = (points: number[]) => {
+  if (points.length < 2) return { text: "— 동일", cls: "flat" as const };
+  const prev = points[points.length - 2];
+  const last = points[points.length - 1];
+  if (last > prev) return { text: "▲ 상승", cls: "up" as const };
+  if (last < prev) return { text: "▼ 하락", cls: "down" as const };
+  return { text: "— 동일", cls: "flat" as const };
+};
+
 const toUTCDateOnly = (timestamp: string) => timestamp.slice(0, 10);
 
 function MiniSparkline({ points, color = "#2f80ed" }: { points: number[]; color?: string }) {
@@ -139,6 +157,7 @@ export default function SiteDetail({ site }: { site: Site }) {
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [loading, setLoading] = useState(false);
+  const [backtestRows, setBacktestRows] = useState<Array<{ date: string; actual_mwh: number; predicted_p50_mwh: number }>>([]);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const monthInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
@@ -252,6 +271,24 @@ export default function SiteDetail({ site }: { site: Site }) {
     });
   }, [tab, selectedMonth, loadMonthlyStats]);
 
+  useEffect(() => {
+    async function loadBacktestRows() {
+      const { data } = await supabase
+        .from("simulation_backtest_daily")
+        .select("date, actual_mwh, predicted_p50_mwh")
+        .eq("site_id", site.id)
+        .not("actual_mwh", "is", null)
+        .order("date", { ascending: false })
+        .limit(365);
+
+      const rows = (data ?? [])
+        .filter((r) => typeof r.actual_mwh === "number" && typeof r.predicted_p50_mwh === "number")
+        .map((r) => ({ date: r.date, actual_mwh: r.actual_mwh as number, predicted_p50_mwh: r.predicted_p50_mwh as number }));
+      setBacktestRows(rows);
+    }
+    void loadBacktestRows();
+  }, [site.id, supabase]);
+
   const dailyExcelData = useMemo(() => {
     return measurements
       .filter((m) => toKSTDateOnly(m.timestamp) === selectedDate)
@@ -262,7 +299,9 @@ export default function SiteDetail({ site }: { site: Site }) {
         ch3: m.ch3,
         ch4: m.ch4,
         ch5: m.ch5,
+        ch6: m.ch6,
         ch7: m.ch7,
+        ch8: m.ch8,
         ch13: m.ch13,
         ch14: m.ch14,
         ch15: m.ch15,
@@ -296,7 +335,7 @@ export default function SiteDetail({ site }: { site: Site }) {
 
   const overviewMonthlyPreview = useMemo(() => {
     return selectedMonthStats
-      .filter((s) => ["ch1", "ch2", "ch3"].includes(s.channel))
+      .filter((s) => ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7", "ch8"].includes(s.channel))
       .reduce<Record<string, Record<string, number>>>((acc, s) => {
         if (!acc[s.date]) acc[s.date] = {};
         acc[s.date][s.channel] = s.avg_value ?? 0;
@@ -311,41 +350,53 @@ export default function SiteDetail({ site }: { site: Site }) {
     ch3: vals.ch3 ?? 0,
     ch4: vals.ch4 ?? 0,
     ch5: vals.ch5 ?? 0,
+    ch6: vals.ch6 ?? 0,
+    ch7: vals.ch7 ?? 0,
+    ch8: vals.ch8 ?? 0,
   }));
 
   const overviewChartSeries = useMemo(() => {
     if (outputPeriod === "1W") return overviewChartData.slice(-7);
     if (outputPeriod === "1M") return overviewChartData;
 
-    const monthMap = new Map<string, { date: string; ch1: number; ch2: number; ch3: number; ch4: number; ch5: number; count: number }>();
-    for (const row of dailyStats.filter((r) => ["ch1", "ch2", "ch3", "ch4", "ch5"].includes(r.channel) && typeof r.avg_value === "number")) {
+    const monthMap = new Map<string, {
+      date: string;
+      ch1: number; ch2: number; ch3: number; ch4: number; ch5: number; ch6: number; ch7: number; ch8: number;
+      c1: number; c2: number; c3: number; c4: number; c5: number; c6: number; c7: number; c8: number;
+    }>();
+    for (const row of dailyStats.filter((r) => ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7", "ch8"].includes(r.channel) && typeof r.avg_value === "number")) {
       const key = row.date.slice(0, 7);
-      const prev = monthMap.get(key) ?? { date: key, ch1: 0, ch2: 0, ch3: 0, ch4: 0, ch5: 0, count: 0 };
+      const prev = monthMap.get(key) ?? { date: key, ch1: 0, ch2: 0, ch3: 0, ch4: 0, ch5: 0, ch6: 0, ch7: 0, ch8: 0, c1: 0, c2: 0, c3: 0, c4: 0, c5: 0, c6: 0, c7: 0, c8: 0 };
       const v = row.avg_value as number;
-      if (row.channel === "ch1") prev.ch1 += v;
-      if (row.channel === "ch2") prev.ch2 += v;
-      if (row.channel === "ch3") prev.ch3 += v;
-      if (row.channel === "ch4") prev.ch4 += v;
-      if (row.channel === "ch5") prev.ch5 += v;
-      prev.count += 1;
+      if (row.channel === "ch1") { prev.ch1 += v; prev.c1 += 1; }
+      if (row.channel === "ch2") { prev.ch2 += v; prev.c2 += 1; }
+      if (row.channel === "ch3") { prev.ch3 += v; prev.c3 += 1; }
+      if (row.channel === "ch4") { prev.ch4 += v; prev.c4 += 1; }
+      if (row.channel === "ch5") { prev.ch5 += v; prev.c5 += 1; }
+      if (row.channel === "ch6") { prev.ch6 += v; prev.c6 += 1; }
+      if (row.channel === "ch7") { prev.ch7 += v; prev.c7 += 1; }
+      if (row.channel === "ch8") { prev.ch8 += v; prev.c8 += 1; }
       monthMap.set(key, prev);
     }
     return Array.from(monthMap.values()).map((r) => ({
       date: r.date,
-      ch1: r.count ? r.ch1 / r.count : 0,
-      ch2: r.count ? r.ch2 / r.count : 0,
-      ch3: r.count ? r.ch3 / r.count : 0,
-      ch4: r.count ? r.ch4 / r.count : 0,
-      ch5: r.count ? r.ch5 / r.count : 0,
+      ch1: r.c1 ? r.ch1 / r.c1 : 0,
+      ch2: r.c2 ? r.ch2 / r.c2 : 0,
+      ch3: r.c3 ? r.ch3 / r.c3 : 0,
+      ch4: r.c4 ? r.ch4 / r.c4 : 0,
+      ch5: r.c5 ? r.ch5 / r.c5 : 0,
+      ch6: r.c6 ? r.ch6 / r.c6 : 0,
+      ch7: r.c7 ? r.ch7 / r.c7 : 0,
+      ch8: r.c8 ? r.ch8 / r.c8 : 0,
     }));
   }, [outputPeriod, overviewChartData, dailyStats]);
 
   const excelMonthlyChartData = useMemo(() => {
     const rows = selectedMonthStats
-      .filter((s) => ["ch1", "ch2", "ch3", "ch4", "ch5"].includes(s.channel))
-      .reduce<Record<string, { date: string; ch1: number; ch2: number; ch3: number; ch4: number; ch5: number }>>((acc, s) => {
+      .filter((s) => ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7", "ch8"].includes(s.channel))
+      .reduce<Record<string, { date: string; ch1: number; ch2: number; ch3: number; ch4: number; ch5: number; ch6: number; ch7: number; ch8: number }>>((acc, s) => {
         if (!acc[s.date]) {
-          acc[s.date] = { date: s.date.slice(5), ch1: 0, ch2: 0, ch3: 0, ch4: 0, ch5: 0 };
+          acc[s.date] = { date: s.date.slice(5), ch1: 0, ch2: 0, ch3: 0, ch4: 0, ch5: 0, ch6: 0, ch7: 0, ch8: 0 };
         }
         const v = s.avg_value ?? 0;
         if (s.channel === "ch1") acc[s.date].ch1 = v;
@@ -353,6 +404,9 @@ export default function SiteDetail({ site }: { site: Site }) {
         if (s.channel === "ch3") acc[s.date].ch3 = v;
         if (s.channel === "ch4") acc[s.date].ch4 = v;
         if (s.channel === "ch5") acc[s.date].ch5 = v;
+        if (s.channel === "ch6") acc[s.date].ch6 = v;
+        if (s.channel === "ch7") acc[s.date].ch7 = v;
+        if (s.channel === "ch8") acc[s.date].ch8 = v;
         return acc;
       }, {});
 
@@ -474,9 +528,80 @@ export default function SiteDetail({ site }: { site: Site }) {
     () => monthRows.filter((r) => r.channel === "ch1").slice(-12).map((r) => r.avg_value ?? 0),
     [monthRows],
   );
-  const sparkCoverage = useMemo(() => monthRows.filter((r) => r.channel === "ch1").slice(-12).map((r) => (r.data_count ? 1 : 0)), [monthRows]);
-  const sparkSync = useMemo(() => monthRows.slice(-12).map((r) => (r.avg_value != null ? 1 : 0)), [monthRows]);
-  const sparkFail = useMemo(() => monthRows.slice(-12).map((r) => (r.std_value != null && r.std_value > 3 ? 1 : 0)), [monthRows]);
+  const monthTurbulenceIntensity = useMemo(() => {
+    const rows = monthRows.filter((r) => r.channel === "ch1" && typeof r.avg_value === "number" && typeof r.std_value === "number" && (r.avg_value as number) > 0);
+    if (!rows.length) return null;
+    const tis = rows.map((r) => ((r.std_value as number) / (r.avg_value as number)) * 100);
+    const avg = tis.reduce((a, b) => a + b, 0) / tis.length;
+    return Math.max(0, Math.min(100, avg));
+  }, [monthRows]);
+
+  const monthMaxGust = useMemo(() => {
+    const rows = monthRows.filter((r) => ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"].includes(r.channel) && typeof r.max_value === "number");
+    if (!rows.length) return null;
+    return Math.max(...rows.map((r) => r.max_value as number));
+  }, [monthRows]);
+
+  const monthWindDirVariability = useMemo(() => {
+    const angles = monthRows
+      .filter((r) => ["ch13", "ch14", "ch15", "ch16"].includes(r.channel) && typeof r.avg_value === "number")
+      .map((r) => (r.avg_value as number) * Math.PI / 180);
+    if (!angles.length) return null;
+    const c = angles.reduce((a, x) => a + Math.cos(x), 0) / angles.length;
+    const s = angles.reduce((a, x) => a + Math.sin(x), 0) / angles.length;
+    const R = Math.sqrt(c * c + s * s);
+    if (R <= 0) return null;
+    return Math.sqrt(-2 * Math.log(R)) * (180 / Math.PI);
+  }, [monthRows]);
+
+  const sparkTI = useMemo(
+    () => monthRows
+      .filter((r) => r.channel === "ch1" && typeof r.avg_value === "number" && typeof r.std_value === "number" && (r.avg_value as number) > 0)
+      .slice(-12)
+      .map((r) => ((r.std_value as number) / (r.avg_value as number)) * 100),
+    [monthRows],
+  );
+  const sparkMaxGust = useMemo(() => {
+    const byDate = new Map<string, number>();
+    for (const r of monthRows) {
+      if (!["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"].includes(r.channel)) continue;
+      if (typeof r.max_value !== "number") continue;
+      const prev = byDate.get(r.date);
+      if (prev == null || r.max_value > prev) byDate.set(r.date, r.max_value);
+    }
+    return Array.from(byDate.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-12)
+      .map(([, v]) => v);
+  }, [monthRows]);
+  const sparkDirVar = useMemo(
+    () => {
+      const byDate = new Map<string, number[]>();
+      for (const r of monthRows) {
+        if (!["ch13", "ch14", "ch15", "ch16"].includes(r.channel)) continue;
+        if (typeof r.avg_value !== "number") continue;
+        if (!byDate.has(r.date)) byDate.set(r.date, []);
+        byDate.get(r.date)!.push((r.avg_value as number) * Math.PI / 180);
+      }
+
+      return Array.from(byDate.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .slice(-12)
+        .map(([, angles]) => {
+          const c = angles.reduce((a, x) => a + Math.cos(x), 0) / angles.length;
+          const s = angles.reduce((a, x) => a + Math.sin(x), 0) / angles.length;
+          const R = Math.sqrt(c * c + s * s);
+          if (R <= 0) return 0;
+          return Math.sqrt(-2 * Math.log(R)) * (180 / Math.PI);
+        });
+    },
+    [monthRows],
+  );
+
+  const windTrend = useMemo(() => trendLabel(sparkWind), [sparkWind]);
+  const tiTrend = useMemo(() => trendLabel(sparkTI), [sparkTI]);
+  const maxGustTrend = useMemo(() => trendLabel(sparkMaxGust), [sparkMaxGust]);
+  const dirTrend = useMemo(() => trendLabel(sparkDirVar), [sparkDirVar]);
 
   const sensorWindRows = useMemo(() => {
     const speedChannels = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"] as const;
@@ -499,20 +624,39 @@ export default function SiteDetail({ site }: { site: Site }) {
     });
   }, [sensorWindRows]);
 
+  const tempByDate = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of dailyStats) {
+      if (r.channel === "ch22" && typeof r.avg_value === "number") map.set(r.date, r.avg_value);
+    }
+    return map;
+  }, [dailyStats]);
+
+  const pressureByDate = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of dailyStats) {
+      if (r.channel === "ch17" && typeof r.avg_value === "number") map.set(r.date, r.avg_value);
+    }
+    return map;
+  }, [dailyStats]);
+
   const estimateDailyRows = useMemo(() => {
     const byDate = monthRows
       .filter((r) => r.channel === "ch1" && typeof r.avg_value === "number")
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    const ratedPowerMw = turbineMw;
-    const losses = 0.17;
+    const scenario = getNearestScenarioByMw(turbineMw);
     return byDate.map((r) => {
       const v = r.avg_value as number;
-      const grossCf = Math.min(Math.max((v - 3) / 9, 0), 1) ** 3;
-      const netCf = Math.min(grossCf * 0.9, 0.62);
-      const p50 = ratedPowerMw * 24 * netCf * (1 - losses);
-      const p75 = p50 * 0.92;
-      const p90 = p50 * 0.84;
+      const uncertaintyPct = r.data_count >= 100 ? 8 : r.data_count >= 50 ? 12 : 16;
+      const p50raw = estimateDailyEnergyMwh({
+        windSpeed: v,
+        tempC: tempByDate.get(r.date),
+        pressureHpa: pressureByDate.get(r.date),
+        scenario,
+        assumptions: DEFAULT_SIMULATION_ASSUMPTIONS,
+      });
+      const { p50, p75, p90 } = estimatePValuesFromP50(p50raw, uncertaintyPct);
       const quality = r.data_count >= 100 ? "정상" : r.data_count >= 50 ? "주의" : "낮음";
       return {
         date: r.date.slice(5),
@@ -523,7 +667,7 @@ export default function SiteDetail({ site }: { site: Site }) {
         quality,
       };
     });
-  }, [monthRows, turbineMw]);
+  }, [monthRows, turbineMw, tempByDate, pressureByDate]);
 
   const estimateRowsForPeriod = useMemo(() => {
     if (overviewPeriod === "1W") {
@@ -535,15 +679,19 @@ export default function SiteDetail({ site }: { site: Site }) {
     }
 
     const monthMap = new Map<string, { date: string; windSum: number; p50Sum: number; p75Sum: number; p90Sum: number; count: number; qualityScore: number }>();
+    const scenario = getNearestScenarioByMw(turbineMw);
     for (const row of dailyStats.filter((r) => r.channel === "ch1" && typeof r.avg_value === "number")) {
       const key = row.date.slice(0, 7);
       const v = row.avg_value as number;
-      const ratedPowerMw = turbineMw;
-      const grossCf = Math.min(Math.max((v - 3) / 9, 0), 1) ** 3;
-      const netCf = Math.min(grossCf * 0.9, 0.62);
-      const p50 = ratedPowerMw * 24 * netCf * (1 - 0.17);
-      const p75 = p50 * 0.92;
-      const p90 = p50 * 0.84;
+      const uncertaintyPct = row.data_count >= 100 ? 8 : row.data_count >= 50 ? 12 : 16;
+      const p50raw = estimateDailyEnergyMwh({
+        windSpeed: v,
+        tempC: tempByDate.get(row.date),
+        pressureHpa: pressureByDate.get(row.date),
+        scenario,
+        assumptions: DEFAULT_SIMULATION_ASSUMPTIONS,
+      });
+      const { p50, p75, p90 } = estimatePValuesFromP50(p50raw, uncertaintyPct);
       const prev = monthMap.get(key) ?? { date: key, windSum: 0, p50Sum: 0, p75Sum: 0, p90Sum: 0, count: 0, qualityScore: 0 };
       prev.windSum += v;
       prev.p50Sum += p50;
@@ -561,7 +709,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       p90: r.p90Sum,
       quality: r.qualityScore >= r.count * 1.5 ? "정상" : r.qualityScore >= r.count ? "주의" : "낮음",
     }));
-  }, [estimateDailyRows, overviewPeriod, dailyStats, turbineMw]);
+  }, [estimateDailyRows, overviewPeriod, dailyStats, turbineMw, tempByDate, pressureByDate]);
 
   const effectiveSimDates = useMemo(() => {
     if (simPreset === "custom") return { start: simStartDate, end: simEndDate };
@@ -583,19 +731,24 @@ export default function SiteDetail({ site }: { site: Site }) {
       })
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    const loss = AGE_LOSS_MAP[turbineAgeBand];
-    const ratedPowerMw = turbineMw;
+    const scenario = getNearestScenarioByMw(turbineMw);
+    const ageLossPct = Math.round(AGE_LOSS_MAP[turbineAgeBand] * 100);
 
     return baseRows.map((r) => {
       const v = r.avg_value as number;
-      const grossCf = Math.min(Math.max((v - 3) / 9, 0), 1) ** 3;
-      const netCf = Math.min(grossCf * 0.9, 0.62);
-      const p50 = ratedPowerMw * 24 * netCf * (1 - loss);
-      const p75 = p50 * 0.92;
-      const p90 = p50 * 0.84;
+      const uncertaintyPct = r.data_count >= 100 ? 8 : r.data_count >= 50 ? 12 : 16;
+      const p50raw = estimateDailyEnergyMwh({
+        windSpeed: v,
+        tempC: tempByDate.get(r.date),
+        pressureHpa: pressureByDate.get(r.date),
+        scenario,
+        assumptions: DEFAULT_SIMULATION_ASSUMPTIONS,
+        extraLossPct: ageLossPct,
+      });
+      const { p50, p75, p90 } = estimatePValuesFromP50(p50raw, uncertaintyPct);
       return { date: r.date, wind: v, p50, p75, p90 };
     });
-  }, [dailyStats, effectiveSimDates, turbineAgeBand, turbineMw]);
+  }, [dailyStats, effectiveSimDates, turbineAgeBand, turbineMw, tempByDate, pressureByDate]);
 
   const simulationRows = useMemo(() => {
     if (simPeriod === "daily") {
@@ -658,6 +811,10 @@ export default function SiteDetail({ site }: { site: Site }) {
     const avgP90 = simulationRows.length ? p90 / simulationRows.length : 0;
     return { totalP50, totalP75, totalP90, avgWind, avgP50, avgP75, avgP90, loss: AGE_LOSS_MAP[turbineAgeBand] };
   }, [simulationDailyRows, simulationRows, turbineAgeBand]);
+
+  const backtest30 = useMemo(() => calculateBacktestMetrics(backtestRows.slice(0, 30).map((r) => ({ actualMwh: r.actual_mwh, predictedMwh: r.predicted_p50_mwh }))), [backtestRows]);
+  const backtest90 = useMemo(() => calculateBacktestMetrics(backtestRows.slice(0, 90).map((r) => ({ actualMwh: r.actual_mwh, predictedMwh: r.predicted_p50_mwh }))), [backtestRows]);
+  const backtest365 = useMemo(() => calculateBacktestMetrics(backtestRows.slice(0, 365).map((r) => ({ actualMwh: r.actual_mwh, predictedMwh: r.predicted_p50_mwh }))), [backtestRows]);
 
   const simulationAssessment = useMemo(() => {
     const coverage = monthCoverage;
@@ -740,27 +897,27 @@ export default function SiteDetail({ site }: { site: Site }) {
           <div className="kpi-row">
             <div className="kpi-card">
               <div className="k-icon"><Wind size={16} /></div>
-              <div className="k-label">Wind · avg</div>
+              <div className="k-label">평균 풍속</div>
               <div className="k-num">{toFixedOrDash(monthAvgWind, 2)}<span className="u">m/s</span></div>
-              <div className="k-foot"><span className="k-delta flat">— steady</span><MiniSparkline points={sparkWind} color="#2f80ed" /></div>
+              <div className="k-foot"><span className={`k-delta ${windTrend.cls}`}>{windTrend.text}</span><MiniSparkline points={sparkWind} color="#2f80ed" /></div>
             </div>
             <div className="kpi-card">
               <div className="k-icon"><BarChart2 size={16} /></div>
-              <div className="k-label">Data coverage</div>
-              <div className="k-num">{monthCoverage}<span className="u">%</span></div>
-              <div className="k-foot"><span className="k-delta up">▲ monthly</span><MiniSparkline points={sparkCoverage} color="#10b981" /></div>
+              <div className="k-label">난류 강도</div>
+              <div className="k-num">{toFixedOrDash(monthTurbulenceIntensity, 1)}<span className="u">%</span></div>
+              <div className="k-foot"><span className={`k-delta ${tiTrend.cls}`}>{tiTrend.text}</span><MiniSparkline points={sparkTI} color="#10b981" /></div>
             </div>
             <div className="kpi-card">
               <div className="k-icon"><Activity size={16} /></div>
-              <div className="k-label">Latest sync</div>
-              <div className="k-num" style={{fontSize: "30px"}}>{latestDataDate}</div>
-              <div className="k-foot"><span className="k-delta up">▲ synced</span><MiniSparkline points={sparkSync} color="#8b5cf6" /></div>
+              <div className="k-label">최대 순간 풍속</div>
+              <div className="k-num">{toFixedOrDash(monthMaxGust, 1)}<span className="u">m/s</span></div>
+              <div className="k-foot"><span className={`k-delta ${maxGustTrend.cls}`}>{maxGustTrend.text}</span><MiniSparkline points={sparkMaxGust} color="#8b5cf6" /></div>
             </div>
             <div className="kpi-card">
               <div className="k-icon"><MapPin size={16} /></div>
-              <div className="k-label">Observed days</div>
-              <div className="k-num">{new Set(monthRows.filter((r) => r.channel === "ch1").map((r) => r.date)).size}<span className="u">days</span></div>
-              <div className="k-foot"><span className="k-delta down">▼ risk</span><MiniSparkline points={sparkFail} color="#ef4444" /></div>
+              <div className="k-label">풍향 변동성</div>
+              <div className="k-num">{toFixedOrDash(monthWindDirVariability, 1)}<span className="u">°</span></div>
+              <div className="k-foot"><span className={`k-delta ${dirTrend.cls}`}>{dirTrend.text}</span><MiniSparkline points={sparkDirVar} color="#ef4444" /></div>
             </div>
           </div>
 
@@ -792,6 +949,9 @@ export default function SiteDetail({ site }: { site: Site }) {
                     <Line type="monotone" dataKey="ch3" name="80m 풍속" stroke={CHART_COLORS.ch3} dot={false} strokeWidth={2} />
                     <Line type="monotone" dataKey="ch4" name="80m 풍속(S)" stroke={CHART_COLORS.ch4} dot={false} strokeWidth={2} />
                     <Line type="monotone" dataKey="ch5" name="60m 풍속" stroke={CHART_COLORS.ch5} dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="ch6" name="60m 풍속(S)" stroke={CHART_COLORS.ch6} dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="ch7" name="40m 풍속" stroke={CHART_COLORS.ch7} dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="ch8" name="40m 풍속(S)" stroke={CHART_COLORS.ch8} dot={false} strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -899,13 +1059,24 @@ export default function SiteDetail({ site }: { site: Site }) {
                 </div>
               </div>
               <div className="space-y-3 text-sm">
-                {[["사이트 번호", site.site_number], ["위치명", site.location_name ?? "-"], ["위도", site.latitude != null ? `${toFixedOrDash(site.latitude, 6)}° N` : "-"], ["경도", site.longitude != null ? `${toFixedOrDash(site.longitude, 6)}° E` : "-"], ["고도", site.elevation != null ? `${toFixedOrDash(site.elevation, 1)} m` : "-"], ["iPack", site.ipack_email ?? "-"]].map(([l, v]) => (
+                {[["사이트 번호", site.site_number], ["현장 주소", site.location_name ?? "-"], ["위도", site.latitude != null ? `${toFixedOrDash(site.latitude, 6)}° N` : "-"], ["경도", site.longitude != null ? `${toFixedOrDash(site.longitude, 6)}° E` : "-"], ["고도", site.elevation != null ? `${toFixedOrDash(site.elevation, 1)} m` : "-"], ["iPack", site.ipack_email ?? "-"]].map(([l, v]) => (
                   <div key={l} className="flex justify-between gap-4"><span className="text-slate-500">{l}</span><span className="text-slate-800 font-mono text-xs text-right">{v}</span></div>
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <button onClick={() => setTab("daily")} className="rounded-lg border border-[#c8def8] bg-white/80 px-3 py-2 text-xs text-slate-700 hover:bg-blue-50">일간 데이터 보기</button>
-                <button onClick={() => setTab("monthly")} className="rounded-lg bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-500">월간 통계 보기</button>
+              <div className="pt-1 space-y-2">
+                <div className="rounded-lg border border-[#d6e8ff] bg-white/70 overflow-hidden">
+                  {site.latitude != null && site.longitude != null ? (
+                    <iframe
+                      title="site-map"
+                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${site.longitude - 0.01}%2C${site.latitude - 0.01}%2C${site.longitude + 0.01}%2C${site.latitude + 0.01}&layer=mapnik&marker=${site.latitude}%2C${site.longitude}`}
+                      className="w-full h-52"
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                    />
+                  ) : (
+                    <div className="h-52 flex items-center justify-center text-xs text-slate-500">지도 좌표 정보가 없습니다</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -985,27 +1156,27 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
-              <div className="p-4 border-b border-[#d6e8ff] flex items-center gap-2 text-slate-900 text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />10 Minutes Average Data (엑셀형 가로)</div>
-              <div className="overflow-x-auto">
+              <div className="p-4 border-b border-[#d6e8ff] flex items-center gap-2 text-slate-900 text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />일별 10분 평균 데이터</div>
+              <div className="overflow-x-auto overflow-y-visible">
                 <table className="w-full min-w-[2400px]">
                   <thead>
                     <tr className="border-b border-[#d6e8ff]/70">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
-                      <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Height</th>
+                      <th className="sticky left-0 z-20 bg-white text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">센서</th>
+                      <th className="sticky left-[200px] z-20 bg-white text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">높이</th>
                       {dailyExcelTable.timeLabels.map((t, i) => <th key={`${t}-${i}`} className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{t}</th>)}
-                      {['AVE', 'MAX', 'MIN', 'STD'].map((h) => <th key={h} className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>)}
+                      {['AVE', 'MAX', 'MIN', 'STD'].map((h, i) => <th key={h} className={`sticky ${RIGHT_SUMMARY_CLASS[i]} z-20 bg-white border-l border-[#d6e8ff] text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider`}>{h}</th>)}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#d6e8ff]/70">
                     {dailyExcelTable.rows.map((row) => (
                       <tr key={row.ch} className="hover:bg-blue-50/60 transition-colors">
-                        <td className="px-4 py-2.5 text-xs text-slate-800 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch]}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-700 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.height ?? "-"}</td>
+                        <td className="sticky left-0 z-10 bg-white px-4 py-2.5 w-[200px] min-w-[200px] text-xs text-slate-800 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch]}</td>
+                        <td className="sticky left-[200px] z-10 bg-white px-3 py-2.5 w-[92px] min-w-[92px] text-xs text-slate-700 whitespace-nowrap border-r border-[#d6e8ff]">{EXCEL_SENSOR_META[row.ch]?.height ?? "-"}</td>
                         {row.values.map((v, i) => <td key={`${row.ch}-${i}`} className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(v, 2)}</td>)}
-                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.ave, 2)}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.max, 2)}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.min, 2)}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.std, 2)}</td>
+                        <td className="sticky right-[216px] z-10 bg-white border-l border-[#d6e8ff] px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.ave, 2)}</td>
+                        <td className="sticky right-[144px] z-10 bg-white border-l border-[#d6e8ff] px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.max, 2)}</td>
+                        <td className="sticky right-[72px] z-10 bg-white border-l border-[#d6e8ff] px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.min, 2)}</td>
+                        <td className="sticky right-0 z-10 bg-white border-l border-[#d6e8ff] px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.std, 2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1067,38 +1238,41 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <Line type="monotone" dataKey="ch3" name="80m 풍속 (N)" stroke={CHART_COLORS.ch3} dot={false} strokeWidth={2} />
                   <Line type="monotone" dataKey="ch4" name="80m 풍속 (S)" stroke={CHART_COLORS.ch4} dot={false} strokeWidth={2} />
                   <Line type="monotone" dataKey="ch5" name="60m 풍속 (N)" stroke={CHART_COLORS.ch5} dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey="ch6" name="60m 풍속 (S)" stroke={CHART_COLORS.ch6} dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey="ch7" name="40m 풍속 (N)" stroke={CHART_COLORS.ch7} dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey="ch8" name="40m 풍속 (S)" stroke={CHART_COLORS.ch8} dot={false} strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
-              <div className="p-4 border-b border-[#d6e8ff] flex items-center gap-2 text-slate-900 text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />월별 통계 수치 (엑셀형 가로 테이블)</div>
-              <div className="overflow-x-auto">
+              <div className="p-4 border-b border-[#d6e8ff] flex items-center gap-2 text-slate-900 text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />월별 통계 데이터</div>
+              <div className="overflow-x-auto overflow-y-visible">
                 <table className="w-full min-w-[2200px]">
                   <thead>
                     <tr className="border-b border-[#d6e8ff]/70">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
-                      <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Height</th>
+                      <th className="sticky left-0 z-20 bg-white text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">센서</th>
+                      <th className="sticky left-[200px] z-20 bg-white text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">높이</th>
                       {excelMonthlyTable.dayLabels.map((d) => (
                         <th key={d} className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{d}</th>
                       ))}
-                      {['AVE', 'MAX', 'MIN', 'STD'].map((h) => (
-                        <th key={h} className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
+                      {['AVE', 'MAX', 'MIN', 'STD'].map((h, i) => (
+                        <th key={h} className={`sticky ${RIGHT_SUMMARY_CLASS[i]} z-20 bg-white border-l border-[#d6e8ff] text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider`}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#d6e8ff]/70">
                     {excelMonthlyTable.rows.map((row) => (
                       <tr key={row.ch} className="hover:bg-blue-50/60 transition-colors">
-                        <td className="px-4 py-2.5 text-xs text-slate-800 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch]}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-700 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.height ?? "-"}</td>
+                        <td className="sticky left-0 z-10 bg-white px-4 py-2.5 w-[200px] min-w-[200px] text-xs text-slate-800 whitespace-nowrap">{EXCEL_SENSOR_META[row.ch]?.description ?? CHANNEL_LABELS[row.ch]}</td>
+                        <td className="sticky left-[200px] z-10 bg-white px-3 py-2.5 w-[92px] min-w-[92px] text-xs text-slate-700 whitespace-nowrap border-r border-[#d6e8ff]">{EXCEL_SENSOR_META[row.ch]?.height ?? "-"}</td>
                         {row.dayValues.map((v, i) => (
                           <td key={`${row.ch}-${i}`} className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(v, 2)}</td>
                         ))}
-                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.ave, 2)}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.max, 2)}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.min, 2)}</td>
-                        <td className="px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.std, 2)}</td>
+                        <td className="sticky right-[216px] z-10 bg-white border-l border-[#d6e8ff] px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.ave, 2)}</td>
+                        <td className="sticky right-[144px] z-10 bg-white border-l border-[#d6e8ff] px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.max, 2)}</td>
+                        <td className="sticky right-[72px] z-10 bg-white border-l border-[#d6e8ff] px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.min, 2)}</td>
+                        <td className="sticky right-0 z-10 bg-white border-l border-[#d6e8ff] px-3 py-2.5 text-xs text-slate-700">{toFixedOrDash(row.std, 2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1125,6 +1299,25 @@ export default function SiteDetail({ site }: { site: Site }) {
                 근거: {simulationAdvice.basis.join(" · ")}
               </div>
             </div>
+          </div>
+
+          <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3">
+            <div className="text-xs text-slate-500 mb-2">백테스트 신뢰도 (실발전량 기준)</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+              {[
+                { label: "30일", v: backtest30 },
+                { label: "90일", v: backtest90 },
+                { label: "365일", v: backtest365 },
+              ].map((r) => (
+                <div key={r.label} className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2">
+                  <div className="text-slate-500">{r.label}</div>
+                  <div className="font-semibold text-slate-900">MAPE {toFixedOrDash(r.v.mapePct, 1)}%</div>
+                  <div className="text-slate-600">NMAE {toFixedOrDash(r.v.nmaePct, 1)}% · Bias {toFixedOrDash(r.v.biasPct, 1)}%</div>
+                  <div className="text-slate-700">등급 {r.v.grade}</div>
+                </div>
+              ))}
+            </div>
+            {backtestRows.length === 0 && <div className="mt-2 text-[11px] text-amber-700">실발전량 데이터가 없어 백테스트가 비어 있습니다.</div>}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
