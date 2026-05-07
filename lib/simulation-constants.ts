@@ -14,6 +14,11 @@ export const BACKTEST_GRADE_RULES = {
   B: { maxMapePct: 12 },
 } as const;
 
+export const MET_MAST_GRADE_RULES = {
+  A: { minCoveragePct: 80, minHighQualityPct: 70 },
+  B: { minCoveragePct: 60, minHighQualityPct: 50 },
+} as const;
+
 // NOTE: 템플릿 커브입니다. 뱅커블 제출 전에는 프로젝트별 후보 기종 실커브로 대체 필요.
 export const STANDARD_TURBINE_SCENARIOS: TurbineScenario[] = [
   {

@@ -7,7 +7,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import * as XLSX from "xlsx";
 import type { Site, DailyStat, Measurement } from "@/lib/types";
 import { CHANNEL_LABELS } from "@/lib/types";
-import { DEFAULT_SIMULATION_ASSUMPTIONS } from "@/lib/simulation-constants";
+import { DEFAULT_SIMULATION_ASSUMPTIONS, MET_MAST_GRADE_RULES, STANDARD_TURBINE_SCENARIOS } from "@/lib/simulation-constants";
 import { estimateDailyEnergyMwh, estimatePValuesFromP50, getNearestScenarioByMw } from "@/lib/simulation-engine";
 
 type Tab = "overview" | "daily" | "monthly" | "simulation";
@@ -61,8 +61,6 @@ const AGE_LOSS_MAP: Record<"0-5" | "6-10" | "11-15" | "16+", number> = {
   "11-15": 0.18,
   "16+": 0.22,
 };
-
-const ONSHORE_CAPACITY_OPTIONS = [4.0, 4.5, 5.0, 5.6, 6.2] as const;
 
 const getKSTParts = (date = new Date()) => {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -802,7 +800,11 @@ export default function SiteDetail({ site }: { site: Site }) {
     const avgPoints = ch1Rows.reduce((a, b) => a + (b.data_count ?? 0), 0) / n;
     const highQualityPct = Math.round((highQuality / n) * 100);
     const coverage = monthCoverage;
-    const grade = coverage >= 80 && highQualityPct >= 70 ? "A" : coverage >= 60 && highQualityPct >= 50 ? "B" : "C";
+    const grade = coverage >= MET_MAST_GRADE_RULES.A.minCoveragePct && highQualityPct >= MET_MAST_GRADE_RULES.A.minHighQualityPct
+      ? "A"
+      : coverage >= MET_MAST_GRADE_RULES.B.minCoveragePct && highQualityPct >= MET_MAST_GRADE_RULES.B.minHighQualityPct
+      ? "B"
+      : "C";
     const reason = grade === "A" ? "커버리지/데이터수 양호" : grade === "B" ? "보완 관측 권장" : "보완 관측 필요";
     return { grade, coverage, highQualityPct, avgPoints, reason };
   }, [dailyStats, monthCoverage]);
@@ -1326,10 +1328,10 @@ export default function SiteDetail({ site }: { site: Site }) {
               </select>
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-slate-500">터빈 용량 (MW)</span>
+              <span className="text-xs text-slate-500">표준 터빈 시나리오</span>
               <select value={String(turbineMw)} onChange={(e) => setTurbineMw(Number(e.target.value))} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
-                {ONSHORE_CAPACITY_OPTIONS.map((mw) => (
-                  <option key={mw} value={mw}>{mw.toFixed(1)} MW</option>
+                {STANDARD_TURBINE_SCENARIOS.map((s) => (
+                  <option key={s.key} value={s.ratedMw}>{s.name} · {s.ratedMw.toFixed(1)}MW · IEC {s.iecClass}</option>
                 ))}
               </select>
             </label>
