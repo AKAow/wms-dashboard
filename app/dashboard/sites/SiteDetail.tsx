@@ -9,7 +9,6 @@ import type { Site, DailyStat, Measurement } from "@/lib/types";
 import { CHANNEL_LABELS } from "@/lib/types";
 import { DEFAULT_SIMULATION_ASSUMPTIONS } from "@/lib/simulation-constants";
 import { estimateDailyEnergyMwh, estimatePValuesFromP50, getNearestScenarioByMw } from "@/lib/simulation-engine";
-import { calculateBacktestMetrics } from "@/lib/backtest-metrics";
 
 type Tab = "overview" | "daily" | "monthly" | "simulation";
 
@@ -158,7 +157,6 @@ export default function SiteDetail({ site }: { site: Site }) {
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [loading, setLoading] = useState(false);
-  const [backtestRows, setBacktestRows] = useState<Array<{ date: string; actual_mwh: number; predicted_p50_mwh: number }>>([]);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const monthInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
@@ -272,23 +270,6 @@ export default function SiteDetail({ site }: { site: Site }) {
     });
   }, [tab, selectedMonth, loadMonthlyStats]);
 
-  useEffect(() => {
-    async function loadBacktestRows() {
-      const { data } = await supabase
-        .from("simulation_backtest_daily")
-        .select("date, actual_mwh, predicted_p50_mwh")
-        .eq("site_id", site.id)
-        .not("actual_mwh", "is", null)
-        .order("date", { ascending: false })
-        .limit(365);
-
-      const rows = (data ?? [])
-        .filter((r) => typeof r.actual_mwh === "number" && typeof r.predicted_p50_mwh === "number")
-        .map((r) => ({ date: r.date, actual_mwh: r.actual_mwh as number, predicted_p50_mwh: r.predicted_p50_mwh as number }));
-      setBacktestRows(rows);
-    }
-    void loadBacktestRows();
-  }, [site.id, supabase]);
 
   const dailyExcelData = useMemo(() => {
     return measurements
@@ -813,9 +794,18 @@ export default function SiteDetail({ site }: { site: Site }) {
     return { totalP50, totalP75, totalP90, avgWind, avgP50, avgP75, avgP90, loss: AGE_LOSS_MAP[turbineAgeBand] };
   }, [simulationDailyRows, simulationRows, turbineAgeBand]);
 
-  const backtest30 = useMemo(() => calculateBacktestMetrics(backtestRows.slice(0, 30).map((r) => ({ actualMwh: r.actual_mwh, predictedMwh: r.predicted_p50_mwh }))), [backtestRows]);
-  const backtest90 = useMemo(() => calculateBacktestMetrics(backtestRows.slice(0, 90).map((r) => ({ actualMwh: r.actual_mwh, predictedMwh: r.predicted_p50_mwh }))), [backtestRows]);
-  const backtest365 = useMemo(() => calculateBacktestMetrics(backtestRows.slice(0, 365).map((r) => ({ actualMwh: r.actual_mwh, predictedMwh: r.predicted_p50_mwh }))), [backtestRows]);
+  const metMastQuality = useMemo(() => {
+    const ch1Rows = dailyStats.filter((r) => r.channel === "ch1" && typeof r.avg_value === "number");
+    const n = ch1Rows.length;
+    if (!n) return { grade: "C" as const, coverage: 0, highQualityPct: 0, avgPoints: 0, reason: "관측 데이터 부족" };
+    const highQuality = ch1Rows.filter((r) => (r.data_count ?? 0) >= 100).length;
+    const avgPoints = ch1Rows.reduce((a, b) => a + (b.data_count ?? 0), 0) / n;
+    const highQualityPct = Math.round((highQuality / n) * 100);
+    const coverage = monthCoverage;
+    const grade = coverage >= 80 && highQualityPct >= 70 ? "A" : coverage >= 60 && highQualityPct >= 50 ? "B" : "C";
+    const reason = grade === "A" ? "커버리지/데이터수 양호" : grade === "B" ? "보완 관측 권장" : "보완 관측 필요";
+    return { grade, coverage, highQualityPct, avgPoints, reason };
+  }, [dailyStats, monthCoverage]);
 
   const simulationAssessment = useMemo(() => {
     const coverage = monthCoverage;
@@ -1303,22 +1293,26 @@ export default function SiteDetail({ site }: { site: Site }) {
           </div>
 
           <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3">
-            <div className="text-xs text-slate-500 mb-2">백테스트 신뢰도 (실발전량 기준)</div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-              {[
-                { label: "30일", v: backtest30 },
-                { label: "90일", v: backtest90 },
-                { label: "365일", v: backtest365 },
-              ].map((r) => (
-                <div key={r.label} className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2">
-                  <div className="text-slate-500">{r.label}</div>
-                  <div className="font-semibold text-slate-900">MAPE {toFixedOrDash(r.v.mapePct, 1)}%</div>
-                  <div className="text-slate-600">NMAE {toFixedOrDash(r.v.nmaePct, 1)}% · Bias {toFixedOrDash(r.v.biasPct, 1)}%</div>
-                  <div className="text-slate-700">등급 {r.v.grade}</div>
-                </div>
-              ))}
+            <div className="text-xs text-slate-500 mb-2">풍황 데이터 신뢰도 (사전타당성 기준)</div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
+              <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2">
+                <div className="text-slate-500">신뢰도 등급</div>
+                <div className="font-semibold text-slate-900">{metMastQuality.grade}</div>
+              </div>
+              <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2">
+                <div className="text-slate-500">월 커버리지</div>
+                <div className="font-semibold text-slate-900">{metMastQuality.coverage}%</div>
+              </div>
+              <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2">
+                <div className="text-slate-500">고품질 일비율</div>
+                <div className="font-semibold text-slate-900">{metMastQuality.highQualityPct}%</div>
+              </div>
+              <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2">
+                <div className="text-slate-500">일 평균 포인트</div>
+                <div className="font-semibold text-slate-900">{toFixedOrDash(metMastQuality.avgPoints, 0)}</div>
+              </div>
             </div>
-            {backtestRows.length === 0 && <div className="mt-2 text-[11px] text-amber-700">실발전량 데이터가 없어 백테스트가 비어 있습니다.</div>}
+            <div className="mt-2 text-[11px] text-slate-600">판정: {metMastQuality.reason} · 실발전량 기반 백테스트는 운영 이후 단계에서 적용</div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
