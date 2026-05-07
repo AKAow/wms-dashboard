@@ -895,6 +895,43 @@ export default function SiteDetail({ site }: { site: Site }) {
     };
   }, [simulationSummary, monthCoverage, turbineMw]);
 
+  const downloadPreFeasibilityReport = useCallback(() => {
+    const wb = XLSX.utils.book_new();
+    const rows = [
+      ["항목", "값"],
+      ["리포트 버전", simulationMeta.version],
+      ["생성시각(KST)", simulationMeta.generatedAt],
+      ["사이트", `${site.name} (${site.site_number})`],
+      ["기간", `${effectiveSimDates.start} ~ ${effectiveSimDates.end}`],
+      ["표준터빈(MW)", turbineMw.toFixed(1)],
+      ["풍황 신뢰도 등급", metMastQuality.grade],
+      ["월 커버리지(%)", metMastQuality.coverage],
+      ["고품질 일비율(%)", metMastQuality.highQualityPct],
+      ["MCP-lite 계수", Number(toFixedOrDash(mcpLiteSummary.factor, 3))],
+      ["총 손실률(%)", simulationMeta.totalLossPct],
+      ["총합 불확실성(%)", Number(toFixedOrDash(uncertaintyBreakdown.totalPct, 1))],
+      ["P75/P50 참고비율", Number(toFixedOrDash(uncertaintyBreakdown.p75p50, 2))],
+      ["P90/P50 참고비율", Number(toFixedOrDash(uncertaintyBreakdown.p90p50, 2))],
+      ["누적 P50(MWh)", Number(toFixedOrDash(simulationSummary.totalP50, 1))],
+      ["누적 P75(MWh)", Number(toFixedOrDash(simulationSummary.totalP75, 1))],
+      ["누적 P90(MWh)", Number(toFixedOrDash(simulationSummary.totalP90, 1))],
+      ["주의", "본 문서는 사전타당성(Pre-bankable) 참고용이며 발전량 보증값이 아닙니다."],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, "Pre-Feasibility");
+    XLSX.writeFile(wb, `${site.site_number}_${effectiveSimDates.start}_${effectiveSimDates.end}_PreFeasibility.xlsx`);
+  }, [
+    simulationMeta,
+    site.name,
+    site.site_number,
+    effectiveSimDates,
+    turbineMw,
+    metMastQuality,
+    mcpLiteSummary.factor,
+    uncertaintyBreakdown,
+    simulationSummary,
+  ]);
+
   return (
     <div className="space-y-6 sitekit">
       <div className="topbar">
@@ -1318,7 +1355,16 @@ export default function SiteDetail({ site }: { site: Site }) {
 
       {tab === "simulation" && (
         <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-4">
-          <h3 className="text-sm font-semibold text-slate-900">사업성 시뮬레이션</h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-slate-900">사업성 시뮬레이션</h3>
+            <button
+              type="button"
+              onClick={downloadPreFeasibilityReport}
+              className="rounded-lg border border-blue-500/40 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-500/20"
+            >
+              사전타당성 리포트 다운로드
+            </button>
+          </div>
           <p className="text-xs text-slate-600">연식 기반 손실률과 적용 구간을 선택해 P50/P75/P90 추정치를 계산합니다.</p>
 
           <div className="flex flex-col md:flex-row gap-2 md:items-center">
