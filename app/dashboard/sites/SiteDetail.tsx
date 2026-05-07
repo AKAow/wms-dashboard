@@ -1383,24 +1383,24 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="mt-1 text-[12px] leading-5 text-slate-700">{simulationAdvice.summary}</div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 text-xs">
-            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2.5">
-              <div className="text-slate-500 tracking-wide">신뢰도 등급</div><div className="font-semibold text-slate-900 mt-0.5">{metMastQuality.grade}</div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5 text-xs">
+            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-3 min-h-[64px] flex flex-col justify-between">
+              <div className="text-slate-500 tracking-wide">신뢰도 등급</div><div className="font-semibold text-slate-900 mt-1">{metMastQuality.grade}</div>
             </div>
-            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2.5">
-              <div className="text-slate-500 tracking-wide">누적 P50</div><div className="font-semibold text-slate-900 mt-0.5">{toFixedOrDash(simulationSummary.totalP50, 1)} MWh</div>
+            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-3 min-h-[64px] flex flex-col justify-between">
+              <div className="text-slate-500 tracking-wide">누적 P50</div><div className="font-semibold text-slate-900 mt-1">{toFixedOrDash(simulationSummary.totalP50, 1)} MWh</div>
             </div>
-            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2.5">
-              <div className="text-slate-500 tracking-wide">P90/P50</div><div className="font-semibold text-slate-900 mt-0.5">{toFixedOrDash(simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0, 2)}</div>
+            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-3 min-h-[64px] flex flex-col justify-between">
+              <div className="text-slate-500 tracking-wide">P90/P50</div><div className="font-semibold text-slate-900 mt-1">{toFixedOrDash(simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0, 2)}</div>
             </div>
-            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2.5">
-              <div className="text-slate-500 tracking-wide">월 커버리지</div><div className="font-semibold text-slate-900 mt-0.5">{monthCoverage}%</div>
+            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-3 min-h-[64px] flex flex-col justify-between">
+              <div className="text-slate-500 tracking-wide">월 커버리지</div><div className="font-semibold text-slate-900 mt-1">{monthCoverage}%</div>
             </div>
           </div>
 
-          <div className="sticky top-2 z-20 rounded-lg border border-[#d6e8ff] bg-white/95 backdrop-blur px-3 py-2.5 space-y-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-              <label className="space-y-1">
+          <div className="sticky top-2 z-20 rounded-lg border border-[#d6e8ff] bg-white/95 backdrop-blur px-3 py-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2 text-sm">
+              <label className="space-y-1 rounded-md border border-[#d6e8ff] bg-white px-2.5 py-2">
                 <span className="text-[11px] tracking-wide text-slate-500 inline-flex items-center gap-2 whitespace-nowrap">터빈 연식 구간 <b className="text-slate-700">손실률 {Math.round(simulationSummary.loss * 100)}%</b></span>
                 <select value={turbineAgeBand} onChange={(e) => setTurbineAgeBand(e.target.value as "0-5" | "6-10" | "11-15" | "16+")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
                   <option value="0-5">0~5년 (12%)</option>
@@ -1409,7 +1409,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <option value="16+">16년 이상 (22%)</option>
                 </select>
               </label>
-              <label className="space-y-1">
+              <label className="space-y-1 rounded-md border border-[#d6e8ff] bg-white px-2.5 py-2">
                 <span className="text-[11px] tracking-wide text-slate-500">표준 터빈 시나리오</span>
                 <select value={String(turbineMw)} onChange={(e) => setTurbineMw(Number(e.target.value))} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
                   {STANDARD_TURBINE_SCENARIOS.map((s) => (
@@ -1417,9 +1417,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                   ))}
                 </select>
               </label>
-            </div>
-            <div className="flex flex-wrap items-end gap-2 text-xs pt-1 border-t border-[#e8f1ff]">
-              <label className="space-y-1">
+              <label className="space-y-1 rounded-md border border-[#d6e8ff] bg-white px-2.5 py-2">
                 <span className="text-[11px] tracking-wide text-slate-500">표시기준</span>
                 <select value={simPeriod} onChange={(e) => setSimPeriod(e.target.value as "daily" | "weekly" | "monthly")} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800">
                   <option value="daily">일별</option>
@@ -1427,7 +1425,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <option value="monthly">월별</option>
                 </select>
               </label>
-              <label className="space-y-1">
+              <label className="space-y-1 rounded-md border border-[#d6e8ff] bg-white px-2.5 py-2">
                 <span className="text-[11px] tracking-wide text-slate-500">적용기간</span>
                 <select value={simPreset} onChange={(e) => setSimPreset(e.target.value as "3M" | "6M" | "12M" | "custom")} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800">
                   <option value="3M">3M</option>
@@ -1436,14 +1434,14 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <option value="custom">커스텀</option>
                 </select>
               </label>
-              <label className="space-y-1">
+              <div className="rounded-md border border-[#d6e8ff] bg-white px-2.5 py-2 space-y-1">
                 <span className="text-[11px] tracking-wide text-slate-500">시작</span>
                 <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.start} onChange={(e) => setSimStartDate(e.target.value)} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
-              </label>
-              <label className="space-y-1">
+              </div>
+              <div className="rounded-md border border-[#d6e8ff] bg-white px-2.5 py-2 space-y-1">
                 <span className="text-[11px] tracking-wide text-slate-500">종료</span>
                 <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.end} onChange={(e) => setSimEndDate(e.target.value)} className="h-8 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
-              </label>
+              </div>
             </div>
           </div>
 
