@@ -1383,22 +1383,17 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="mt-1 text-[12px] leading-5 text-slate-700">{simulationAdvice.summary}</div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5 text-xs">
-            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-3 min-h-[64px] flex flex-col justify-between">
-              <div className="text-slate-500 tracking-wide">신뢰도 등급</div><div className="font-semibold text-slate-900 mt-1">{metMastQuality.grade}</div>
+          <div className="sticky top-2 z-20 grid grid-cols-1 xl:grid-cols-3 gap-3">
+            <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3">
+              <div className="text-slate-500 text-xs mb-2">핵심 지표</div>
+              <div className="space-y-2 text-xs">
+                <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2"><div className="text-slate-500 tracking-wide">신뢰도 등급</div><div className="font-semibold text-slate-900 mt-0.5">{metMastQuality.grade}</div></div>
+                <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2"><div className="text-slate-500 tracking-wide">누적 P50</div><div className="font-semibold text-slate-900 mt-0.5">{toFixedOrDash(simulationSummary.totalP50, 1)} MWh</div></div>
+                <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2"><div className="text-slate-500 tracking-wide">P90/P50</div><div className="font-semibold text-slate-900 mt-0.5">{toFixedOrDash(simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0, 2)}</div></div>
+                <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2"><div className="text-slate-500 tracking-wide">월 커버리지</div><div className="font-semibold text-slate-900 mt-0.5">{monthCoverage}%</div></div>
+              </div>
             </div>
-            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-3 min-h-[64px] flex flex-col justify-between">
-              <div className="text-slate-500 tracking-wide">누적 P50</div><div className="font-semibold text-slate-900 mt-1">{toFixedOrDash(simulationSummary.totalP50, 1)} MWh</div>
-            </div>
-            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-3 min-h-[64px] flex flex-col justify-between">
-              <div className="text-slate-500 tracking-wide">P90/P50</div><div className="font-semibold text-slate-900 mt-1">{toFixedOrDash(simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0, 2)}</div>
-            </div>
-            <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-3 min-h-[64px] flex flex-col justify-between">
-              <div className="text-slate-500 tracking-wide">월 커버리지</div><div className="font-semibold text-slate-900 mt-1">{monthCoverage}%</div>
-            </div>
-          </div>
 
-          <div className="sticky top-2 z-20 grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3">
               <div className="text-slate-500 text-xs mb-2">터빈 설정</div>
               <div className="space-y-2 text-sm">
