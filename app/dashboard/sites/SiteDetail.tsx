@@ -610,6 +610,17 @@ export default function SiteDetail({ site }: { site: Site }) {
     return Math.max(...rows.map((r) => r.max_value as number));
   }, [monthRows]);
 
+  const monthlyWindRoseData = useMemo(() => {
+    const dirByDate = new Map<string, number>();
+    const speedByDate = new Map<string, number>();
+    for (const r of selectedMonthStats) {
+      if (r.channel === "ch13" && typeof r.avg_value === "number") dirByDate.set(r.date, r.avg_value);
+      if (r.channel === "ch1" && typeof r.avg_value === "number") speedByDate.set(r.date, r.avg_value);
+    }
+    const dates = new Set([...dirByDate.keys(), ...speedByDate.keys()]);
+    return Array.from(dates).map((date) => ({ dir: dirByDate.get(date) ?? null, speed: speedByDate.get(date) ?? null }));
+  }, [selectedMonthStats]);
+
   const monthWindDirVariability = useMemo(() => {
     const angles = monthRows
       .filter((r) => ["ch13", "ch14", "ch15", "ch16"].includes(r.channel) && typeof r.avg_value === "number")
@@ -1485,6 +1496,11 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <Line type="monotone" dataKey="ch8" name="40m 풍속 (S)" stroke={CHART_COLORS.ch8} dot={false} strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
+            </div>
+
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
+              <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />Wind Direction Rose</h3>
+              <WindRose data={monthlyWindRoseData} />
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
