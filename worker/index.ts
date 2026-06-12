@@ -513,8 +513,8 @@ async function runScheduledSync(env: Env): Promise<Response> {
     const defaultQuery = `has:attachment filename:rld filename:${site.site_number}_ newer_than:14d`;
     const q = encodeURIComponent(siteQuery && siteQuery.length > 0 ? siteQuery : defaultQuery);
 
-    const PAGE_SIZE = 10;
-    const MAX_PAGES = 15; // 페이지당 10개 × 15페이지 = 최대 150개 스캔
+    const PAGE_SIZE = 5;
+    const MAX_PAGES = 4; // 페이지당 5개 × 4페이지 = 최대 20개 스캔 (1101 방지)
     let pageToken: string | undefined;
     let pagesChecked = 0;
     let processedForSite = 0;
