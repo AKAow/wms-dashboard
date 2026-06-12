@@ -146,7 +146,7 @@ const WIND_ROSE_BANDS = [
   { label: "12+",  max: Infinity, color: "#7c3aed" },
 ];
 
-function WindRose({ data }: { data: Array<{ dir: number | null | undefined; speed: number | null | undefined }> }) {
+function WindRose({ data, label }: { data: Array<{ dir: number | null | undefined; speed: number | null | undefined }>; label?: string }) {
   const n = 16;
   const sectorDeg = 360 / n;
   const cx = 160, cy = 160, r = 120;
@@ -218,7 +218,7 @@ function WindRose({ data }: { data: Array<{ dir: number | null | undefined; spee
           </div>
         ))}
       </div>
-      <p className="text-[11px] text-slate-400">ch13 방향 · ch1 풍속 기준 · 총 {total}개 데이터포인트</p>
+      {label && <p className="text-[11px] text-slate-400">{label} · 총 {total}개 데이터포인트</p>}
     </div>
   );
 }
@@ -832,7 +832,7 @@ export default function SiteDetail({ site }: { site: Site }) {
     });
   }, [monthRows, turbineMw, tempByDate, pressureByDate]);
 
-  // Overview WindRose 데이터 (기간 + 높이 선택 기반)
+  // Overview WindRose — 선택 높이
   const overviewWindRoseData = useMemo(() => {
     const speedCh = "ch1";
     const dirCh = windRoseDirCh;
@@ -849,6 +849,32 @@ export default function SiteDetail({ site }: { site: Site }) {
     const dates = new Set([...dirByDate.keys(), ...speedByDate.keys()]);
     return Array.from(dates).map((d) => ({ dir: dirByDate.get(d) ?? null, speed: speedByDate.get(d) ?? null }));
   }, [overviewKpiPeriod, windRoseDirCh, dailyExcelData, dailyStats, selectedMonthStats]);
+
+  // Overview WindRose — 전체 높이 종합 (ch13↔ch1, ch14↔ch3, ch15↔ch5, ch16↔ch7)
+  const overviewWindRoseAllData = useMemo(() => {
+    const PAIRS = [
+      { dir: "ch13", speed: "ch1" },
+      { dir: "ch14", speed: "ch3" },
+      { dir: "ch15", speed: "ch5" },
+      { dir: "ch16", speed: "ch7" },
+    ] as const;
+    if (overviewKpiPeriod === "day") {
+      return PAIRS.flatMap(({ dir, speed }) =>
+        dailyExcelData.map((m) => ({ dir: m[dir], speed: m[speed] }))
+      );
+    }
+    const source = overviewKpiPeriod === "all" ? dailyStats : selectedMonthStats;
+    return PAIRS.flatMap(({ dir: dirCh, speed: speedCh }) => {
+      const dirByDate = new Map<string, number>();
+      const speedByDate = new Map<string, number>();
+      for (const r of source) {
+        if (r.channel === dirCh && typeof r.avg_value === "number") dirByDate.set(r.date, r.avg_value);
+        if (r.channel === speedCh && typeof r.avg_value === "number") speedByDate.set(r.date, r.avg_value);
+      }
+      const dates = new Set([...dirByDate.keys(), ...speedByDate.keys()]);
+      return Array.from(dates).map((d) => ({ dir: dirByDate.get(d) ?? null, speed: speedByDate.get(d) ?? null }));
+    });
+  }, [overviewKpiPeriod, dailyExcelData, dailyStats, selectedMonthStats]);
 
   const estimateRowsForPeriod = useMemo(() => {
     if (overviewKpiPeriod === "day") {
@@ -1258,7 +1284,17 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <option value="ch16">37m (ch16)</option>
                 </select>
               </div>
-              <WindRose data={overviewWindRoseData} />
+              <div className="grid grid-cols-2 gap-4">
+                <WindRose data={overviewWindRoseAllData} label="전 높이 종합" />
+                <WindRose
+                  data={overviewWindRoseData}
+                  label={
+                    windRoseDirCh === "ch13" ? "97m" :
+                    windRoseDirCh === "ch14" ? "77m" :
+                    windRoseDirCh === "ch15" ? "57m" : "37m"
+                  }
+                />
+              </div>
             </div>
 
             <div className="panel">
