@@ -1236,67 +1236,71 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
           </div>
 
-          <div className="panel">
-              <div className="panel-head">
-                <div>
-                  <div className="p-title">풍속 출력 추이</div>
-                  <div className="p-sub">{overviewKpiPeriod === "all" ? "전체 기간 월별 평균" : overviewKpiPeriod === "month" ? `${selectedMonth} 일별 평균` : `${selectedDate} 10분 데이터`}</div>
+          <div className="grid grid-cols-[1.5fr_1fr] gap-3 items-start">
+            {/* 좌측: 풍속 추이 + WindRose */}
+            <div className="flex flex-col gap-3">
+              <div className="panel">
+                <div className="panel-head">
+                  <div>
+                    <div className="p-title">풍속 출력 추이</div>
+                    <div className="p-sub">{overviewKpiPeriod === "all" ? "전체 기간 월별 평균" : overviewKpiPeriod === "month" ? `${selectedMonth} 일별 평균` : `${selectedDate} 10분 데이터`}</div>
+                  </div>
                 </div>
+                {overviewChartSeries.length === 0 ? (
+                  <div className="text-sm text-slate-500 py-10 text-center">월간 데이터가 없습니다</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <LineChart data={overviewChartSeries}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
+                      <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
+                      <Legend wrapperStyle={{ fontSize: "12px" }} />
+                      <Line type="monotone" dataKey="ch1" name="100m 풍속" stroke={CHART_COLORS.ch1} dot={false} strokeWidth={2} />
+                      <Line type="monotone" dataKey="ch2" name="96m 풍속" stroke={CHART_COLORS.ch2} dot={false} strokeWidth={2} />
+                      <Line type="monotone" dataKey="ch3" name="80m 풍속" stroke={CHART_COLORS.ch3} dot={false} strokeWidth={2} />
+                      <Line type="monotone" dataKey="ch4" name="80m 풍속(S)" stroke={CHART_COLORS.ch4} dot={false} strokeWidth={2} />
+                      <Line type="monotone" dataKey="ch5" name="60m 풍속" stroke={CHART_COLORS.ch5} dot={false} strokeWidth={2} />
+                      <Line type="monotone" dataKey="ch6" name="60m 풍속(S)" stroke={CHART_COLORS.ch6} dot={false} strokeWidth={2} />
+                      <Line type="monotone" dataKey="ch7" name="40m 풍속" stroke={CHART_COLORS.ch7} dot={false} strokeWidth={2} />
+                      <Line type="monotone" dataKey="ch8" name="40m 풍속(S)" stroke={CHART_COLORS.ch8} dot={false} strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
               </div>
-              {overviewChartSeries.length === 0 ? (
-                <div className="text-sm text-slate-500 py-10 text-center">월간 데이터가 없습니다</div>
-              ) : (
-                <ResponsiveContainer width="100%" height={280}>
-                  <LineChart data={overviewChartSeries}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
-                    <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
-                    <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
-                    <Legend wrapperStyle={{ fontSize: "12px" }} />
-                    <Line type="monotone" dataKey="ch1" name="100m 풍속" stroke={CHART_COLORS.ch1} dot={false} strokeWidth={2} />
-                    <Line type="monotone" dataKey="ch2" name="96m 풍속" stroke={CHART_COLORS.ch2} dot={false} strokeWidth={2} />
-                    <Line type="monotone" dataKey="ch3" name="80m 풍속" stroke={CHART_COLORS.ch3} dot={false} strokeWidth={2} />
-                    <Line type="monotone" dataKey="ch4" name="80m 풍속(S)" stroke={CHART_COLORS.ch4} dot={false} strokeWidth={2} />
-                    <Line type="monotone" dataKey="ch5" name="60m 풍속" stroke={CHART_COLORS.ch5} dot={false} strokeWidth={2} />
-                    <Line type="monotone" dataKey="ch6" name="60m 풍속(S)" stroke={CHART_COLORS.ch6} dot={false} strokeWidth={2} />
-                    <Line type="monotone" dataKey="ch7" name="40m 풍속" stroke={CHART_COLORS.ch7} dot={false} strokeWidth={2} />
-                    <Line type="monotone" dataKey="ch8" name="40m 풍속(S)" stroke={CHART_COLORS.ch8} dot={false} strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-          </div>
 
-          <div className="grid grid-cols-[1.5fr_1fr] gap-3">
-            <div className="panel">
-              <div className="panel-head">
-                <div>
-                  <div className="p-title">Wind Direction Rose</div>
-                  <div className="p-sub">방향 분포 및 풍속 밴드</div>
+              <div className="panel">
+                <div className="panel-head">
+                  <div>
+                    <div className="p-title">Wind Direction Rose</div>
+                    <div className="p-sub">방향 분포 및 풍속 밴드</div>
+                  </div>
+                  <select
+                    value={windRoseDirCh}
+                    onChange={(e) => setWindRoseDirCh(e.target.value as "ch13" | "ch14" | "ch15" | "ch16")}
+                    className="rounded-lg border border-[#d6e8ff] bg-white px-2 py-1 text-xs text-slate-700"
+                  >
+                    <option value="ch13">97m (ch13)</option>
+                    <option value="ch14">77m (ch14)</option>
+                    <option value="ch15">57m (ch15)</option>
+                    <option value="ch16">37m (ch16)</option>
+                  </select>
                 </div>
-                <select
-                  value={windRoseDirCh}
-                  onChange={(e) => setWindRoseDirCh(e.target.value as "ch13" | "ch14" | "ch15" | "ch16")}
-                  className="rounded-lg border border-[#d6e8ff] bg-white px-2 py-1 text-xs text-slate-700"
-                >
-                  <option value="ch13">97m (ch13)</option>
-                  <option value="ch14">77m (ch14)</option>
-                  <option value="ch15">57m (ch15)</option>
-                  <option value="ch16">37m (ch16)</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <WindRose data={overviewWindRoseAllData} label="전 높이 종합" />
-                <WindRose
-                  data={overviewWindRoseData}
-                  label={
-                    windRoseDirCh === "ch13" ? "97m" :
-                    windRoseDirCh === "ch14" ? "77m" :
-                    windRoseDirCh === "ch15" ? "57m" : "37m"
-                  }
-                />
+                <div className="grid grid-cols-2 gap-4">
+                  <WindRose data={overviewWindRoseAllData} label="전 높이 종합" />
+                  <WindRose
+                    data={overviewWindRoseData}
+                    label={
+                      windRoseDirCh === "ch13" ? "97m" :
+                      windRoseDirCh === "ch14" ? "77m" :
+                      windRoseDirCh === "ch15" ? "57m" : "37m"
+                    }
+                  />
+                </div>
               </div>
             </div>
 
+            {/* 우측: 센서별 풍속 */}
             <div className="panel">
               <div className="panel-head">
                 <div>
