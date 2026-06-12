@@ -14,8 +14,12 @@ export interface Env {
   // 추가 Gmail 계정 (사이트별 수신 계정이 다를 때)
   GMAIL_REFRESH_TOKEN_2?: string;
   GMAIL_USER_2?: string;
+  GMAIL_CLIENT_ID_2?: string;
+  GMAIL_CLIENT_SECRET_2?: string;
   GMAIL_REFRESH_TOKEN_3?: string;
   GMAIL_USER_3?: string;
+  GMAIL_CLIENT_ID_3?: string;
+  GMAIL_CLIENT_SECRET_3?: string;
   GMAIL_MAX_ATTACHMENTS_PER_SITE?: string; // default: 10
 
   // Optional: Cloudflare API for updating cron trigger from web settings
@@ -287,16 +291,18 @@ async function processRldFile(env: Env, fileName: string, fileBuffer: ArrayBuffe
   return { ok: true, file_name: fileName, site_number: sn, site_id: siteId, records_inserted: inserted, is_new_site: isNew };
 }
 
-async function getGoogleAccessToken(env: Env, refreshToken?: string): Promise<string> {
+async function getGoogleAccessToken(env: Env, refreshToken?: string, clientId?: string, clientSecret?: string): Promise<string> {
   const token = refreshToken || env.GMAIL_REFRESH_TOKEN;
-  if (!env.GMAIL_CLIENT_ID || !env.GMAIL_CLIENT_SECRET || !token) return "";
+  const cid = clientId || env.GMAIL_CLIENT_ID;
+  const csec = clientSecret || env.GMAIL_CLIENT_SECRET;
+  if (!cid || !csec || !token) return "";
 
   const r = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: env.GMAIL_CLIENT_ID,
-      client_secret: env.GMAIL_CLIENT_SECRET,
+      client_id: cid,
+      client_secret: csec,
       refresh_token: token,
       grant_type: "refresh_token",
     }),
@@ -305,6 +311,14 @@ async function getGoogleAccessToken(env: Env, refreshToken?: string): Promise<st
   if (!r.ok) return "";
   const d = (await r.json()) as { access_token?: string };
   return d.access_token || "";
+}
+
+function getClientCredentialsForAccount(env: Env, gmailUser: string): { clientId?: string; clientSecret?: string } {
+  const defaultUser = env.GMAIL_USER || "windtreeeng@gmail.com";
+  if (!gmailUser || gmailUser === defaultUser) return {};
+  if (env.GMAIL_USER_2 && gmailUser === env.GMAIL_USER_2) return { clientId: env.GMAIL_CLIENT_ID_2, clientSecret: env.GMAIL_CLIENT_SECRET_2 };
+  if (env.GMAIL_USER_3 && gmailUser === env.GMAIL_USER_3) return { clientId: env.GMAIL_CLIENT_ID_3, clientSecret: env.GMAIL_CLIENT_SECRET_3 };
+  return {};
 }
 
 function getRefreshTokenForAccount(env: Env, gmailUser: string): string | undefined {
@@ -462,7 +476,8 @@ async function runScheduledSync(env: Env): Promise<Response> {
   async function getTokenForUser(gmailUser: string): Promise<string> {
     if (tokenCache.has(gmailUser)) return tokenCache.get(gmailUser)!;
     const refreshToken = getRefreshTokenForAccount(env, gmailUser);
-    const t = await getGoogleAccessToken(env, refreshToken);
+    const { clientId, clientSecret } = getClientCredentialsForAccount(env, gmailUser);
+    const t = await getGoogleAccessToken(env, refreshToken, clientId, clientSecret);
     tokenCache.set(gmailUser, t);
     return t;
   }
@@ -592,9 +607,9 @@ const worker = {
 
     if (url.pathname === "/worker-secrets" && request.method === "GET") {
       const slots = [
-        { slot: "default", userKey: "GMAIL_USER", tokenKey: "GMAIL_REFRESH_TOKEN" },
-        { slot: "2",       userKey: "GMAIL_USER_2", tokenKey: "GMAIL_REFRESH_TOKEN_2" },
-        { slot: "3",       userKey: "GMAIL_USER_3", tokenKey: "GMAIL_REFRESH_TOKEN_3" },
+        { slot: "default", userKey: "GMAIL_USER", tokenKey: "GMAIL_REFRESH_TOKEN", cidKey: "GMAIL_CLIENT_ID", csecKey: "GMAIL_CLIENT_SECRET" },
+        { slot: "2",       userKey: "GMAIL_USER_2", tokenKey: "GMAIL_REFRESH_TOKEN_2", cidKey: "GMAIL_CLIENT_ID_2", csecKey: "GMAIL_CLIENT_SECRET_2" },
+        { slot: "3",       userKey: "GMAIL_USER_3", tokenKey: "GMAIL_REFRESH_TOKEN_3", cidKey: "GMAIL_CLIENT_ID_3", csecKey: "GMAIL_CLIENT_SECRET_3" },
       ] as const;
       const accounts = slots.map(({ slot, userKey, tokenKey }) => ({
         slot,
@@ -616,7 +631,7 @@ const worker = {
       const cfBase = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${scriptName}/secrets`;
       const cfHeaders = { "Authorization": `Bearer ${apiToken}`, "Content-Type": "application/json" };
 
-      const body = (await request.json().catch(() => ({}))) as { action?: string; slot?: string; email?: string; refreshToken?: string };
+      const body = (await request.json().catch(() => ({}))) as { action?: string; slot?: string; email?: string; refreshToken?: string; clientId?: string; clientSecret?: string };
       const { action, slot } = body;
 
       if (!slot || slot === "default") {
@@ -628,16 +643,20 @@ const worker = {
       }
 
       if (action === "set") {
-        const { email, refreshToken } = body;
+        const { email, refreshToken, clientId, clientSecret } = body;
         if (!email || !refreshToken) {
           return new Response(JSON.stringify({ error: "email과 refreshToken 필요" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
         }
-        const [r1, r2] = await Promise.all([
+        const puts: Promise<Response>[] = [
           fetch(cfBase, { method: "PUT", headers: cfHeaders, body: JSON.stringify({ name: `GMAIL_USER${suffix}`, text: email, type: "secret_text" }) }),
           fetch(cfBase, { method: "PUT", headers: cfHeaders, body: JSON.stringify({ name: `GMAIL_REFRESH_TOKEN${suffix}`, text: refreshToken, type: "secret_text" }) }),
-        ]);
-        if (!r1.ok || !r2.ok) {
-          const err = await (r1.ok ? r2 : r1).json().catch(() => ({})) as { errors?: { message: string }[] };
+        ];
+        if (clientId) puts.push(fetch(cfBase, { method: "PUT", headers: cfHeaders, body: JSON.stringify({ name: `GMAIL_CLIENT_ID${suffix}`, text: clientId, type: "secret_text" }) }));
+        if (clientSecret) puts.push(fetch(cfBase, { method: "PUT", headers: cfHeaders, body: JSON.stringify({ name: `GMAIL_CLIENT_SECRET${suffix}`, text: clientSecret, type: "secret_text" }) }));
+        const results = await Promise.all(puts);
+        const failed = results.find((r) => !r.ok);
+        if (failed) {
+          const err = await failed.json().catch(() => ({})) as { errors?: { message: string }[] };
           return new Response(JSON.stringify({ error: err?.errors?.[0]?.message || "Cloudflare API 오류" }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
         }
         return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
