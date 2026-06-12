@@ -225,8 +225,7 @@ function WindRose({ data }: { data: Array<{ dir: number | null | undefined; spee
 
 export default function SiteDetail({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
-  const [outputPeriod, setOutputPeriod] = useState<"1W" | "1M" | "1Y">("1M");
-  const [overviewPeriod, setOverviewPeriod] = useState<"1W" | "1M" | "1Y">("1M");
+  const [windRoseDirCh, setWindRoseDirCh] = useState<"ch13" | "ch14" | "ch15" | "ch16">("ch13");
   const [simPeriod, setSimPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
   const [simPreset, setSimPreset] = useState<"3M" | "6M" | "12M" | "custom">("6M");
   const [simStartDate, setSimStartDate] = useState(() => {
@@ -424,9 +423,17 @@ export default function SiteDetail({ site }: { site: Site }) {
   }));
 
   const overviewChartSeries = useMemo(() => {
-    if (outputPeriod === "1W") return overviewChartData.slice(-7);
-    if (outputPeriod === "1M") return overviewChartData;
-
+    // 일별: 10분 raw 데이터
+    if (overviewKpiPeriod === "day") {
+      return dailyExcelData.map((m) => ({
+        date: m.time,
+        ch1: m.ch1 ?? 0, ch2: m.ch2 ?? 0, ch3: m.ch3 ?? 0, ch4: m.ch4 ?? 0,
+        ch5: m.ch5 ?? 0, ch6: m.ch6 ?? 0, ch7: m.ch7 ?? 0, ch8: m.ch8 ?? 0,
+      }));
+    }
+    // 월간: 선택 월 일별 평균
+    if (overviewKpiPeriod === "month") return overviewChartData;
+    // 전체: 전 기간 월별 평균
     const monthMap = new Map<string, {
       date: string;
       ch1: number; ch2: number; ch3: number; ch4: number; ch5: number; ch6: number; ch7: number; ch8: number;
@@ -448,16 +455,12 @@ export default function SiteDetail({ site }: { site: Site }) {
     }
     return Array.from(monthMap.values()).map((r) => ({
       date: r.date,
-      ch1: r.c1 ? r.ch1 / r.c1 : 0,
-      ch2: r.c2 ? r.ch2 / r.c2 : 0,
-      ch3: r.c3 ? r.ch3 / r.c3 : 0,
-      ch4: r.c4 ? r.ch4 / r.c4 : 0,
-      ch5: r.c5 ? r.ch5 / r.c5 : 0,
-      ch6: r.c6 ? r.ch6 / r.c6 : 0,
-      ch7: r.c7 ? r.ch7 / r.c7 : 0,
-      ch8: r.c8 ? r.ch8 / r.c8 : 0,
+      ch1: r.c1 ? r.ch1 / r.c1 : 0, ch2: r.c2 ? r.ch2 / r.c2 : 0,
+      ch3: r.c3 ? r.ch3 / r.c3 : 0, ch4: r.c4 ? r.ch4 / r.c4 : 0,
+      ch5: r.c5 ? r.ch5 / r.c5 : 0, ch6: r.c6 ? r.ch6 / r.c6 : 0,
+      ch7: r.c7 ? r.ch7 / r.c7 : 0, ch8: r.c8 ? r.ch8 / r.c8 : 0,
     }));
-  }, [outputPeriod, overviewChartData, dailyStats]);
+  }, [overviewKpiPeriod, overviewChartData, dailyStats, dailyExcelData]);
 
   const excelMonthlyChartData = useMemo(() => {
     const rows = selectedMonthStats
@@ -756,14 +759,23 @@ export default function SiteDetail({ site }: { site: Site }) {
 
   const sensorWindRows = useMemo(() => {
     const speedChannels = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"] as const;
+    if (overviewKpiPeriod === "day") {
+      return speedChannels.map((ch) => {
+        const values = dailyExcelData.map((m) => m[ch]).filter((v): v is number => typeof v === "number");
+        const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+        const latest = values.length ? values[values.length - 1] : null;
+        return { ch, label: CHANNEL_LABELS[ch], avg, latest };
+      });
+    }
+    const source = overviewKpiPeriod === "all" ? dailyStats : monthRows;
     return speedChannels.map((ch) => {
-      const rows = monthRows.filter((r) => r.channel === ch && typeof r.avg_value === "number");
+      const rows = source.filter((r) => r.channel === ch && typeof r.avg_value === "number");
       const values = rows.map((r) => r.avg_value as number);
       const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
       const latest = values.length ? values[values.length - 1] : null;
       return { ch, label: CHANNEL_LABELS[ch], avg, latest };
     });
-  }, [monthRows]);
+  }, [overviewKpiPeriod, monthRows, dailyStats, dailyExcelData]);
 
   const sensorWindUiRows = useMemo(() => {
     return sensorWindRows.map((row) => {
@@ -820,12 +832,30 @@ export default function SiteDetail({ site }: { site: Site }) {
     });
   }, [monthRows, turbineMw, tempByDate, pressureByDate]);
 
+  // Overview WindRose 데이터 (기간 + 높이 선택 기반)
+  const overviewWindRoseData = useMemo(() => {
+    const speedCh = "ch1";
+    const dirCh = windRoseDirCh;
+    if (overviewKpiPeriod === "day") {
+      return dailyExcelData.map((m) => ({ dir: m[dirCh], speed: m[speedCh] }));
+    }
+    const source = overviewKpiPeriod === "all" ? dailyStats : selectedMonthStats;
+    const dirByDate = new Map<string, number>();
+    const speedByDate = new Map<string, number>();
+    for (const r of source) {
+      if (r.channel === dirCh && typeof r.avg_value === "number") dirByDate.set(r.date, r.avg_value);
+      if (r.channel === speedCh && typeof r.avg_value === "number") speedByDate.set(r.date, r.avg_value);
+    }
+    const dates = new Set([...dirByDate.keys(), ...speedByDate.keys()]);
+    return Array.from(dates).map((d) => ({ dir: dirByDate.get(d) ?? null, speed: speedByDate.get(d) ?? null }));
+  }, [overviewKpiPeriod, windRoseDirCh, dailyExcelData, dailyStats, selectedMonthStats]);
+
   const estimateRowsForPeriod = useMemo(() => {
-    if (overviewPeriod === "1W") {
-      return estimateDailyRows.slice(-7);
+    if (overviewKpiPeriod === "day") {
+      return estimateDailyRows.slice(-1);
     }
 
-    if (overviewPeriod === "1M") {
+    if (overviewKpiPeriod === "month") {
       return estimateDailyRows;
     }
 
@@ -834,7 +864,7 @@ export default function SiteDetail({ site }: { site: Site }) {
     for (const row of dailyStats.filter((r) => r.channel === "ch1" && typeof r.avg_value === "number")) {
       const key = row.date.slice(0, 7);
       const v = row.avg_value as number;
-      const uncertaintyPct = row.data_count >= 100 ? 8 : row.data_count >= 50 ? 12 : 16;
+      const uncertaintyPct = (row.data_count ?? 0) >= 100 ? 8 : (row.data_count ?? 0) >= 50 ? 12 : 16;
       const p50raw = estimateDailyEnergyMwh({
         windSpeed: v,
         tempC: tempByDate.get(row.date),
@@ -849,7 +879,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       prev.p75Sum += p75;
       prev.p90Sum += p90;
       prev.count += 1;
-      prev.qualityScore += row.data_count >= 100 ? 2 : row.data_count >= 50 ? 1 : 0;
+      prev.qualityScore += (row.data_count ?? 0) >= 100 ? 2 : (row.data_count ?? 0) >= 50 ? 1 : 0;
       monthMap.set(key, prev);
     }
     return Array.from(monthMap.values()).map((r) => ({
@@ -860,7 +890,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       p90: r.p90Sum,
       quality: r.qualityScore >= r.count * 1.5 ? "정상" : r.qualityScore >= r.count ? "주의" : "낮음",
     }));
-  }, [estimateDailyRows, overviewPeriod, dailyStats, turbineMw, tempByDate, pressureByDate]);
+  }, [estimateDailyRows, overviewKpiPeriod, dailyStats, turbineMw, tempByDate, pressureByDate]);
 
   const effectiveSimDates = useMemo(() => {
     if (simPreset === "custom") return { start: simStartDate, end: simEndDate };
@@ -1185,12 +1215,7 @@ export default function SiteDetail({ site }: { site: Site }) {
               <div className="panel-head">
                 <div>
                   <div className="p-title">풍속 출력 추이</div>
-                  <div className="p-sub">기간별 센서 풍속 추세</div>
-                </div>
-                <div className="seg">
-                  {(["1W", "1M", "1Y"] as const).map((p) => (
-                    <span key={p} className={outputPeriod === p ? "on" : ""} onClick={() => setOutputPeriod(p)}>{p}</span>
-                  ))}
+                  <div className="p-sub">{overviewKpiPeriod === "all" ? "전체 기간 월별 평균" : overviewKpiPeriod === "month" ? `${selectedMonth} 일별 평균` : `${selectedDate} 10분 데이터`}</div>
                 </div>
               </div>
               {overviewChartSeries.length === 0 ? (
@@ -1214,6 +1239,26 @@ export default function SiteDetail({ site }: { site: Site }) {
                   </LineChart>
                 </ResponsiveContainer>
               )}
+            </div>
+
+            <div className="panel">
+              <div className="panel-head">
+                <div>
+                  <div className="p-title">Wind Direction Rose</div>
+                  <div className="p-sub">방향 분포 및 풍속 밴드</div>
+                </div>
+                <select
+                  value={windRoseDirCh}
+                  onChange={(e) => setWindRoseDirCh(e.target.value as "ch13" | "ch14" | "ch15" | "ch16")}
+                  className="rounded-lg border border-[#d6e8ff] bg-white px-2 py-1 text-xs text-slate-700"
+                >
+                  <option value="ch13">97m (ch13)</option>
+                  <option value="ch14">77m (ch14)</option>
+                  <option value="ch15">57m (ch15)</option>
+                  <option value="ch16">37m (ch16)</option>
+                </select>
+              </div>
+              <WindRose data={overviewWindRoseData} />
             </div>
 
             <div className="panel">
@@ -1250,12 +1295,7 @@ export default function SiteDetail({ site }: { site: Site }) {
               <div className="panel-head">
                 <div>
                   <div className="p-title">일자별 사업성 추정</div>
-                  <div className="p-sub">신뢰구간(P50/P75/P90) 포함 일별 추정값</div>
-                </div>
-                <div className="seg">
-                  {(["1W", "1M", "1Y"] as const).map((p) => (
-                    <span key={p} className={overviewPeriod === p ? "on" : ""} onClick={() => setOverviewPeriod(p)}>{p}</span>
-                  ))}
+                  <div className="p-sub">신뢰구간(P50/P75/P90) 포함 추정값</div>
                 </div>
               </div>
 
