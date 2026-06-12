@@ -513,66 +513,76 @@ async function runScheduledSync(env: Env): Promise<Response> {
     const defaultQuery = `has:attachment filename:rld filename:${site.site_number}_ newer_than:14d`;
     const q = encodeURIComponent(siteQuery && siteQuery.length > 0 ? siteQuery : defaultQuery);
 
-    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(siteGmailUser)}/messages?q=${q}&maxResults=${MAX_MESSAGES_PER_SITE}`;
-    const listRes = await fetch(listUrl, { headers: auth });
-    if (!listRes.ok) {
-      const txt = await listRes.text();
-      results.push({ ok: false, site_id: site.id, site_number: site.site_number, error: "gmail-list-failed", detail: txt });
-      continue;
-    }
-
-    const list = (await listRes.json()) as { messages?: { id: string }[] };
-    const msgs = (list.messages || []).slice(0, MAX_MESSAGES_PER_SITE);
-    checkedMessages += msgs.length;
-
+    const PAGE_SIZE = 10;
+    const MAX_PAGES = 15; // 페이지당 10개 × 15페이지 = 최대 150개 스캔
+    let pageToken: string | undefined;
+    let pagesChecked = 0;
     let processedForSite = 0;
-    for (const m of msgs) {
-      if (processedForSite >= MAX_ATTACHMENTS_PER_SITE) break;
 
-      const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(siteGmailUser)}/messages/${m.id}?format=full`, { headers: auth });
-      if (!msgRes.ok) continue;
-      const msg = (await msgRes.json()) as any;
+    do {
+      const pageParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "";
+      const listUrl = `https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(siteGmailUser)}/messages?q=${q}&maxResults=${PAGE_SIZE}${pageParam}`;
+      const listRes = await fetch(listUrl, { headers: auth });
+      if (!listRes.ok) {
+        const txt = await listRes.text();
+        results.push({ ok: false, site_id: site.id, site_number: site.site_number, error: "gmail-list-failed", detail: txt });
+        break;
+      }
 
-      const parts = walkParts(msg.payload?.parts);
-      for (const p of parts) {
-        const fileName: string = p.filename || "";
-        const isRld = fileName.toLowerCase().endsWith(".rld");
-        if (!isRld) continue;
+      const list = (await listRes.json()) as { messages?: { id: string }[]; nextPageToken?: string };
+      const msgs = list.messages || [];
+      pageToken = list.nextPageToken;
+      checkedMessages += msgs.length;
+      pagesChecked++;
 
-        if (!fileName.includes(`${site.site_number}_`)) continue;
+      for (const m of msgs) {
+        if (processedForSite >= MAX_ATTACHMENTS_PER_SITE) break;
 
-        const already = await hasUploadHistory(env, fileName);
-        if (already) {
-          skipped++;
-          results.push({ ok: true, skipped: true, reason: "already-uploaded", site_id: site.id, site_number: site.site_number, file_name: fileName });
-          continue;
-        }
+        const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(siteGmailUser)}/messages/${m.id}?format=full`, { headers: auth });
+        if (!msgRes.ok) continue;
+        const msg = (await msgRes.json()) as any;
 
-        const aid = p.body?.attachmentId;
-        if (!aid) continue;
+        const parts = walkParts(msg.payload?.parts);
+        for (const p of parts) {
+          const fileName: string = p.filename || "";
+          if (!fileName.toLowerCase().endsWith(".rld")) continue;
+          if (!fileName.includes(`${site.site_number}_`)) continue;
 
-        const attRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(siteGmailUser)}/messages/${m.id}/attachments/${aid}`, { headers: auth });
-        if (!attRes.ok) continue;
-        const att = (await attRes.json()) as { data?: string };
-        if (!att.data) continue;
+          const already = await hasUploadHistory(env, fileName);
+          if (already) {
+            skipped++;
+            results.push({ ok: true, skipped: true, reason: "already-uploaded", site_id: site.id, site_number: site.site_number, file_name: fileName });
+            continue;
+          }
 
-        try {
-          const buf = fromBase64UrlToArrayBuffer(att.data);
-          const r = await processRldFile(env, fileName, buf, "gmail-cron");
-          processed++;
-          processedForSite++;
-          results.push({ ...r, site_id: site.id, site_number: site.site_number });
-        } catch (e: unknown) {
-          results.push({
-            ok: false,
-            site_id: site.id,
-            site_number: site.site_number,
-            file_name: fileName,
-            error: e instanceof Error ? e.message : String(e),
-          });
+          const aid = p.body?.attachmentId;
+          if (!aid) continue;
+
+          const attRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(siteGmailUser)}/messages/${m.id}/attachments/${aid}`, { headers: auth });
+          if (!attRes.ok) continue;
+          const att = (await attRes.json()) as { data?: string };
+          if (!att.data) continue;
+
+          try {
+            const buf = fromBase64UrlToArrayBuffer(att.data);
+            const r = await processRldFile(env, fileName, buf, "gmail-cron");
+            processed++;
+            processedForSite++;
+            results.push({ ...r, site_id: site.id, site_number: site.site_number });
+          } catch (e: unknown) {
+            results.push({
+              ok: false,
+              site_id: site.id,
+              site_number: site.site_number,
+              file_name: fileName,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
         }
       }
-    }
+
+      if (processedForSite >= MAX_ATTACHMENTS_PER_SITE) break;
+    } while (pageToken && pagesChecked < MAX_PAGES);
   }
 
   return new Response(JSON.stringify({ ok: true, processed, skipped, checked_messages: checkedMessages, enabled_sites: targets.length, scanned_sites: limitedTargets.length, results }));
