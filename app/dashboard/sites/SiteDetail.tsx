@@ -1236,8 +1236,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
           </div>
 
-          <div className="grid">
-            <div className="panel">
+          <div className="panel">
               <div className="panel-head">
                 <div>
                   <div className="p-title">풍속 출력 추이</div>
@@ -1265,8 +1264,9 @@ export default function SiteDetail({ site }: { site: Site }) {
                   </LineChart>
                 </ResponsiveContainer>
               )}
-            </div>
+          </div>
 
+          <div className="grid grid-cols-[1.5fr_1fr] gap-3">
             <div className="panel">
               <div className="panel-head">
                 <div>
