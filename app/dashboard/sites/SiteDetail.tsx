@@ -137,6 +137,92 @@ function MiniSparkline({ points, color = "#2f80ed" }: { points: number[]; color?
   );
 }
 
+const WIND_ROSE_DIRS = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"] as const;
+const WIND_ROSE_BANDS = [
+  { label: "0–3",  max: 3,        color: "#bfdbfe" },
+  { label: "3–6",  max: 6,        color: "#60a5fa" },
+  { label: "6–9",  max: 9,        color: "#2f80ed" },
+  { label: "9–12", max: 12,       color: "#1d4ed8" },
+  { label: "12+",  max: Infinity, color: "#7c3aed" },
+];
+
+function WindRose({ data }: { data: Array<{ dir: number | null | undefined; speed: number | null | undefined }> }) {
+  const n = 16;
+  const sectorDeg = 360 / n;
+  const cx = 160, cy = 160, r = 120;
+
+  const sectors: number[][] = Array.from({ length: n }, () => Array(WIND_ROSE_BANDS.length).fill(0));
+  let total = 0;
+
+  for (const { dir, speed } of data) {
+    if (dir == null || speed == null) continue;
+    total++;
+    const idx = Math.round(((dir % 360) + 360) / sectorDeg) % n;
+    const band = WIND_ROSE_BANDS.findIndex((b) => (speed as number) < b.max);
+    if (band >= 0) sectors[idx][band]++;
+  }
+
+  if (total === 0) {
+    return <div className="h-64 flex items-center justify-center text-sm text-slate-500">풍향 데이터 없음</div>;
+  }
+
+  const maxFreq = Math.max(...sectors.map((s) => s.reduce((a, b) => a + b, 0)), 1);
+  const halfRad = (sectorDeg / 2) * (Math.PI / 180);
+
+  const petals = sectors.flatMap((bands, i) => {
+    const centerRad = (i * sectorDeg - 90) * (Math.PI / 180);
+    let cum = 0;
+    return bands.map((count, bi) => {
+      if (count === 0) { cum += count; return null; }
+      const ir = (cum / maxFreq) * r;
+      const or = ((cum + count) / maxFreq) * r;
+      cum += count;
+      const sa = centerRad - halfRad;
+      const ea = centerRad + halfRad;
+      const path = ir > 0.5
+        ? `M${(cx + ir * Math.cos(sa)).toFixed(1)},${(cy + ir * Math.sin(sa)).toFixed(1)} L${(cx + or * Math.cos(sa)).toFixed(1)},${(cy + or * Math.sin(sa)).toFixed(1)} A${or.toFixed(1)},${or.toFixed(1)} 0 0,1 ${(cx + or * Math.cos(ea)).toFixed(1)},${(cy + or * Math.sin(ea)).toFixed(1)} L${(cx + ir * Math.cos(ea)).toFixed(1)},${(cy + ir * Math.sin(ea)).toFixed(1)} A${ir.toFixed(1)},${ir.toFixed(1)} 0 0,0 ${(cx + ir * Math.cos(sa)).toFixed(1)},${(cy + ir * Math.sin(sa)).toFixed(1)} Z`
+        : `M${cx},${cy} L${(cx + or * Math.cos(sa)).toFixed(1)},${(cy + or * Math.sin(sa)).toFixed(1)} A${or.toFixed(1)},${or.toFixed(1)} 0 0,1 ${(cx + or * Math.cos(ea)).toFixed(1)},${(cy + or * Math.sin(ea)).toFixed(1)} Z`;
+      return <path key={`${i}-${bi}`} d={path} fill={WIND_ROSE_BANDS[bi].color} opacity={0.88} />;
+    });
+  });
+
+  const rings = [0.25, 0.5, 0.75, 1.0].map((pct) => (
+    <circle key={pct} cx={cx} cy={cy} r={pct * r} fill="none" stroke="#d6e8ff" strokeWidth={1} strokeDasharray="3 3" />
+  ));
+
+  const labels = WIND_ROSE_DIRS.map((label, i) => {
+    const angle = (i * sectorDeg - 90) * (Math.PI / 180);
+    const lr = r + 18;
+    return (
+      <text key={label} x={(cx + lr * Math.cos(angle)).toFixed(1)} y={(cy + lr * Math.sin(angle)).toFixed(1)}
+        textAnchor="middle" dominantBaseline="middle" fontSize={10}
+        fill="#64748b" fontWeight={["N","S","E","W"].includes(label) ? 700 : 400}>
+        {label}
+      </text>
+    );
+  });
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <svg viewBox="0 0 320 320" className="w-full max-w-[280px]">
+        {rings}
+        {petals}
+        {labels}
+        <circle cx={cx} cy={cy} r={3} fill="#64748b" />
+      </svg>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 justify-center">
+        {WIND_ROSE_BANDS.map((b) => (
+          <div key={b.label} className="flex items-center gap-1.5 text-xs text-slate-600">
+            <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: b.color }} />
+            {b.label} m/s
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-slate-400">ch13 방향 · ch1 풍속 기준 · 총 {total}개 데이터포인트</p>
+    </div>
+  );
+}
+
 export default function SiteDetail({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
   const [outputPeriod, setOutputPeriod] = useState<"1W" | "1M" | "1Y">("1M");
@@ -156,6 +242,7 @@ export default function SiteDetail({ site }: { site: Site }) {
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [loading, setLoading] = useState(false);
+  const [overviewKpiPeriod, setOverviewKpiPeriod] = useState<"all" | "month" | "day">("month");
   const dateInputRef = useRef<HTMLInputElement>(null);
   const monthInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
@@ -256,11 +343,11 @@ export default function SiteDetail({ site }: { site: Site }) {
   }, [site.id, supabase]);
 
   useEffect(() => {
-    if (tab !== "daily") return;
+    if (tab !== "daily" && overviewKpiPeriod !== "day") return;
     queueMicrotask(() => {
       void loadMeasurements();
     });
-  }, [tab, selectedDate, loadMeasurements]);
+  }, [tab, selectedDate, overviewKpiPeriod, loadMeasurements]);
 
   useEffect(() => {
     if (tab !== "monthly" && tab !== "overview") return;
@@ -583,6 +670,78 @@ export default function SiteDetail({ site }: { site: Site }) {
   const tiTrend = useMemo(() => trendLabel(sparkTI), [sparkTI]);
   const maxGustTrend = useMemo(() => trendLabel(sparkMaxGust), [sparkMaxGust]);
   const dirTrend = useMemo(() => trendLabel(sparkDirVar), [sparkDirVar]);
+
+  // 전체 기간 KPI
+  const allAvgWind = useMemo(() => {
+    const values = dailyStats.filter((r) => r.channel === "ch1" && typeof r.avg_value === "number").map((r) => r.avg_value as number);
+    if (!values.length) return null;
+    return values.reduce((a, b) => a + b, 0) / values.length;
+  }, [dailyStats]);
+
+  const allTurbulenceIntensity = useMemo(() => {
+    const rows = dailyStats.filter((r) => r.channel === "ch1" && typeof r.avg_value === "number" && typeof r.std_value === "number" && (r.avg_value as number) > 0);
+    if (!rows.length) return null;
+    const tis = rows.map((r) => ((r.std_value as number) / (r.avg_value as number)) * 100);
+    return Math.max(0, Math.min(100, tis.reduce((a, b) => a + b, 0) / tis.length));
+  }, [dailyStats]);
+
+  const allMaxGust = useMemo(() => {
+    const rows = dailyStats.filter((r) => ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"].includes(r.channel) && typeof r.max_value === "number");
+    if (!rows.length) return null;
+    return Math.max(...rows.map((r) => r.max_value as number));
+  }, [dailyStats]);
+
+  const allWindDirVariability = useMemo(() => {
+    const angles = dailyStats.filter((r) => ["ch13", "ch14", "ch15", "ch16"].includes(r.channel) && typeof r.avg_value === "number").map((r) => (r.avg_value as number) * Math.PI / 180);
+    if (!angles.length) return null;
+    const c = angles.reduce((a, x) => a + Math.cos(x), 0) / angles.length;
+    const s = angles.reduce((a, x) => a + Math.sin(x), 0) / angles.length;
+    const R = Math.sqrt(c * c + s * s);
+    if (R <= 0) return null;
+    return Math.sqrt(-2 * Math.log(R)) * (180 / Math.PI);
+  }, [dailyStats]);
+
+  // 일별 KPI (selectedDate 기준, measurements 원시 데이터)
+  const dayAvgWind = useMemo(() => {
+    const values = dailyExcelData.map((m) => m.ch1).filter((v): v is number => typeof v === "number");
+    if (!values.length) return null;
+    return values.reduce((a, b) => a + b, 0) / values.length;
+  }, [dailyExcelData]);
+
+  const dayTurbulenceIntensity = useMemo(() => {
+    const values = dailyExcelData.map((m) => m.ch1).filter((v): v is number => typeof v === "number");
+    if (values.length < 2) return null;
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    if (mean <= 0) return null;
+    const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;
+    return Math.max(0, Math.min(100, (Math.sqrt(variance) / mean) * 100));
+  }, [dailyExcelData]);
+
+  const dayMaxGust = useMemo(() => {
+    const chKeys = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"] as const;
+    const values = dailyExcelData.flatMap((m) => chKeys.map((ch) => m[ch]).filter((v): v is number => typeof v === "number"));
+    if (!values.length) return null;
+    return Math.max(...values);
+  }, [dailyExcelData]);
+
+  const dayWindDirVariability = useMemo(() => {
+    const chKeys = ["ch13", "ch14", "ch15", "ch16"] as const;
+    const angles = dailyExcelData
+      .flatMap((m) => chKeys.map((ch) => m[ch]).filter((v): v is number => typeof v === "number"))
+      .map((v) => v * Math.PI / 180);
+    if (!angles.length) return null;
+    const c = angles.reduce((a, x) => a + Math.cos(x), 0) / angles.length;
+    const s = angles.reduce((a, x) => a + Math.sin(x), 0) / angles.length;
+    const R = Math.sqrt(c * c + s * s);
+    if (R <= 0) return null;
+    return Math.sqrt(-2 * Math.log(R)) * (180 / Math.PI);
+  }, [dailyExcelData]);
+
+  // 기간 선택에 따른 활성 KPI
+  const activeAvgWind = overviewKpiPeriod === "all" ? allAvgWind : overviewKpiPeriod === "day" ? dayAvgWind : monthAvgWind;
+  const activeTI = overviewKpiPeriod === "all" ? allTurbulenceIntensity : overviewKpiPeriod === "day" ? dayTurbulenceIntensity : monthTurbulenceIntensity;
+  const activeMaxGust = overviewKpiPeriod === "all" ? allMaxGust : overviewKpiPeriod === "day" ? dayMaxGust : monthMaxGust;
+  const activeDirVar = overviewKpiPeriod === "all" ? allWindDirVariability : overviewKpiPeriod === "day" ? dayWindDirVariability : monthWindDirVariability;
 
   const sensorWindRows = useMemo(() => {
     const speedChannels = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"] as const;
@@ -969,29 +1128,43 @@ export default function SiteDetail({ site }: { site: Site }) {
 
       {tab === "overview" && (
         <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1 bg-white/70 rounded-xl p-1 border border-[#d6e8ff] shadow-[0_4px_12px_rgba(10,37,64,0.06)]">
+              {(["all", "month", "day"] as const).map((p) => (
+                <button key={p} onClick={() => setOverviewKpiPeriod(p)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${overviewKpiPeriod === p ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-700"}`}>
+                  {p === "all" ? "전체 기간" : p === "month" ? "월간" : "일별"}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-slate-400">
+              {overviewKpiPeriod === "month" && selectedMonth}
+              {overviewKpiPeriod === "day" && selectedDate}
+            </span>
+          </div>
           <div className="kpi-row">
             <div className="kpi-card">
               <div className="k-icon"><Wind size={16} /></div>
               <div className="k-label">평균 풍속</div>
-              <div className="k-num">{toFixedOrDash(monthAvgWind, 2)}<span className="u">m/s</span></div>
+              <div className="k-num">{toFixedOrDash(activeAvgWind, 2)}<span className="u">m/s</span></div>
               <div className="k-foot"><span className={`k-delta ${windTrend.cls}`}>{windTrend.text}</span><MiniSparkline points={sparkWind} color="#2f80ed" /></div>
             </div>
             <div className="kpi-card">
               <div className="k-icon"><BarChart2 size={16} /></div>
               <div className="k-label">난류 강도</div>
-              <div className="k-num">{toFixedOrDash(monthTurbulenceIntensity, 1)}<span className="u">%</span></div>
+              <div className="k-num">{toFixedOrDash(activeTI, 1)}<span className="u">%</span></div>
               <div className="k-foot"><span className={`k-delta ${tiTrend.cls}`}>{tiTrend.text}</span><MiniSparkline points={sparkTI} color="#10b981" /></div>
             </div>
             <div className="kpi-card">
               <div className="k-icon"><Activity size={16} /></div>
               <div className="k-label">최대 순간 풍속</div>
-              <div className="k-num">{toFixedOrDash(monthMaxGust, 1)}<span className="u">m/s</span></div>
+              <div className="k-num">{toFixedOrDash(activeMaxGust, 1)}<span className="u">m/s</span></div>
               <div className="k-foot"><span className={`k-delta ${maxGustTrend.cls}`}>{maxGustTrend.text}</span><MiniSparkline points={sparkMaxGust} color="#8b5cf6" /></div>
             </div>
             <div className="kpi-card">
               <div className="k-icon"><MapPin size={16} /></div>
               <div className="k-label">풍향 변동성</div>
-              <div className="k-num">{toFixedOrDash(monthWindDirVariability, 1)}<span className="u">°</span></div>
+              <div className="k-num">{toFixedOrDash(activeDirVar, 1)}<span className="u">°</span></div>
               <div className="k-foot"><span className={`k-delta ${dirTrend.cls}`}>{dirTrend.text}</span><MiniSparkline points={sparkDirVar} color="#ef4444" /></div>
             </div>
           </div>
@@ -1203,17 +1376,8 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
-              <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />Wind Direction</h3>
-              <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={dailyExcelData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
-                  <XAxis dataKey="time" tick={{ fontSize: 10, fill: "#64748b" }} interval={11} />
-                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} domain={[0, 360]} unit=" °" />
-                  <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  {EXCEL_WIND_DIR_CHANNELS.map((ch) => <Line key={ch} type="monotone" dataKey={ch} name={CHANNEL_LABELS[ch]} stroke={CHART_COLORS[ch] ?? "#94a3b8"} dot={false} strokeWidth={1.8} />)}
-                </LineChart>
-              </ResponsiveContainer>
+              <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />Wind Direction Rose</h3>
+              <WindRose data={dailyExcelData.map((m) => ({ dir: m.ch13, speed: m.ch1 }))} />
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
@@ -1222,10 +1386,13 @@ export default function SiteDetail({ site }: { site: Site }) {
                 <LineChart data={dailyExcelData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
                   <XAxis dataKey="time" tick={{ fontSize: 10, fill: "#64748b" }} interval={11} />
-                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "#64748b" }} unit="°" domain={["auto", "auto"]} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "#a855f7" }} unit=" hPa" domain={["auto", "auto"]} />
                   <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
                   <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  {EXCEL_ATMO_CHANNELS.map((ch) => <Line key={ch} type="monotone" dataKey={ch} name={CHANNEL_LABELS[ch]} stroke={CHART_COLORS[ch] ?? "#22d3ee"} dot={false} strokeWidth={1.8} />)}
+                  <Line yAxisId="right" type="monotone" dataKey="ch17" name={CHANNEL_LABELS["ch17"]} stroke={CHART_COLORS["ch17"]} dot={false} strokeWidth={1.8} />
+                  <Line yAxisId="left" type="monotone" dataKey="ch21" name={CHANNEL_LABELS["ch21"]} stroke={CHART_COLORS["ch21"]} dot={false} strokeWidth={1.8} />
+                  <Line yAxisId="left" type="monotone" dataKey="ch22" name={CHANNEL_LABELS["ch22"]} stroke={CHART_COLORS["ch22"]} dot={false} strokeWidth={1.8} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -1297,7 +1464,7 @@ export default function SiteDetail({ site }: { site: Site }) {
           </div>
 
           {loading ? <div className="text-center py-12 text-slate-500 text-sm">로딩 중...</div>
-          : Object.keys(excelMonthlyChartData).length === 0 ? <div className="text-center py-12 text-slate-500 text-sm rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl">해당 월의 데이터가 없습니다</div>
+          : excelMonthlyChartData.length === 0 ? <div className="text-center py-12 text-slate-500 text-sm rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl">해당 월의 데이터가 없습니다</div>
           : <>
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
               <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />엑셀형 월간 채널 비교 그래프 (평균값)</h3>
