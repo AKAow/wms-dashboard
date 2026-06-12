@@ -11,6 +11,11 @@ export interface Env {
   GMAIL_CLIENT_SECRET?: string;
   GMAIL_REFRESH_TOKEN?: string;
   GMAIL_USER?: string; // default: windtreeeng@gmail.com
+  // 추가 Gmail 계정 (사이트별 수신 계정이 다를 때)
+  GMAIL_REFRESH_TOKEN_2?: string;
+  GMAIL_USER_2?: string;
+  GMAIL_REFRESH_TOKEN_3?: string;
+  GMAIL_USER_3?: string;
   GMAIL_MAX_ATTACHMENTS_PER_SITE?: string; // default: 10
 
   // Optional: Cloudflare API for updating cron trigger from web settings
@@ -282,8 +287,9 @@ async function processRldFile(env: Env, fileName: string, fileBuffer: ArrayBuffe
   return { ok: true, file_name: fileName, site_number: sn, site_id: siteId, records_inserted: inserted, is_new_site: isNew };
 }
 
-async function getGoogleAccessToken(env: Env): Promise<string> {
-  if (!env.GMAIL_CLIENT_ID || !env.GMAIL_CLIENT_SECRET || !env.GMAIL_REFRESH_TOKEN) return "";
+async function getGoogleAccessToken(env: Env, refreshToken?: string): Promise<string> {
+  const token = refreshToken || env.GMAIL_REFRESH_TOKEN;
+  if (!env.GMAIL_CLIENT_ID || !env.GMAIL_CLIENT_SECRET || !token) return "";
 
   const r = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -291,7 +297,7 @@ async function getGoogleAccessToken(env: Env): Promise<string> {
     body: new URLSearchParams({
       client_id: env.GMAIL_CLIENT_ID,
       client_secret: env.GMAIL_CLIENT_SECRET,
-      refresh_token: env.GMAIL_REFRESH_TOKEN,
+      refresh_token: token,
       grant_type: "refresh_token",
     }),
   });
@@ -299,6 +305,14 @@ async function getGoogleAccessToken(env: Env): Promise<string> {
   if (!r.ok) return "";
   const d = (await r.json()) as { access_token?: string };
   return d.access_token || "";
+}
+
+function getRefreshTokenForAccount(env: Env, gmailUser: string): string | undefined {
+  const defaultUser = env.GMAIL_USER || "windtreeeng@gmail.com";
+  if (!gmailUser || gmailUser === defaultUser) return env.GMAIL_REFRESH_TOKEN;
+  if (env.GMAIL_USER_2 && gmailUser === env.GMAIL_USER_2) return env.GMAIL_REFRESH_TOKEN_2;
+  if (env.GMAIL_USER_3 && gmailUser === env.GMAIL_USER_3) return env.GMAIL_REFRESH_TOKEN_3;
+  return env.GMAIL_REFRESH_TOKEN; // fallback
 }
 
 function walkParts(parts: any[] | undefined, out: any[] = []): any[] {
@@ -422,15 +436,11 @@ async function setCronConfig(env: Env, dayKst: string, hourKst = 10, minuteKst =
 }
 
 async function runScheduledSync(env: Env): Promise<Response> {
-  const user = env.GMAIL_USER || "windtreeeng@gmail.com";
-  const token = await getGoogleAccessToken(env);
-  if (!token) {
-    return new Response(JSON.stringify({ ok: false, error: "gmail-token-failed" }), { status: 500 });
-  }
+  const defaultUser = env.GMAIL_USER || "windtreeeng@gmail.com";
 
   const siteRes = await sbFetch(
     env,
-    "/rest/v1/sites?select=id,name,site_number,gmail_sync_enabled,gmail_query,is_active&gmail_sync_enabled=eq.true&is_active=eq.true",
+    "/rest/v1/sites?select=id,name,site_number,gmail_sync_enabled,gmail_query,sync_gmail_account,is_active&gmail_sync_enabled=eq.true&is_active=eq.true",
   );
   if (!siteRes.ok) {
     const txt = await siteRes.text();
@@ -443,10 +453,26 @@ async function runScheduledSync(env: Env): Promise<Response> {
     site_number: string;
     gmail_sync_enabled: boolean;
     gmail_query: string | null;
+    sync_gmail_account: string | null;
     is_active: boolean;
   }>;
 
-  const auth = { Authorization: `Bearer ${token}` };
+  // 사이트별 수신 Gmail 계정 → 토큰 캐시 (계정당 1회 발급)
+  const tokenCache = new Map<string, string>();
+  async function getTokenForUser(gmailUser: string): Promise<string> {
+    if (tokenCache.has(gmailUser)) return tokenCache.get(gmailUser)!;
+    const refreshToken = getRefreshTokenForAccount(env, gmailUser);
+    const t = await getGoogleAccessToken(env, refreshToken);
+    tokenCache.set(gmailUser, t);
+    return t;
+  }
+
+  // 기본 계정 토큰 미리 확인
+  const defaultToken = await getTokenForUser(defaultUser);
+  if (!defaultToken) {
+    return new Response(JSON.stringify({ ok: false, error: "gmail-token-failed" }), { status: 500 });
+  }
+
   let processed = 0;
   let skipped = 0;
   let checkedMessages = 0;
@@ -460,11 +486,19 @@ async function runScheduledSync(env: Env): Promise<Response> {
   const limitedTargets = targets.slice(0, MAX_SITES_PER_RUN);
 
   for (const site of limitedTargets) {
+    const siteGmailUser = site.sync_gmail_account?.trim() || defaultUser;
+    const siteToken = await getTokenForUser(siteGmailUser);
+    if (!siteToken) {
+      results.push({ ok: false, site_id: site.id, site_number: site.site_number, error: "gmail-token-failed", account: siteGmailUser });
+      continue;
+    }
+    const auth = { Authorization: `Bearer ${siteToken}` };
+
     const siteQuery = site.gmail_query?.trim();
     const defaultQuery = `has:attachment filename:rld filename:${site.site_number}_ newer_than:14d`;
     const q = encodeURIComponent(siteQuery && siteQuery.length > 0 ? siteQuery : defaultQuery);
 
-    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(user)}/messages?q=${q}&maxResults=${MAX_MESSAGES_PER_SITE}`;
+    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(siteGmailUser)}/messages?q=${q}&maxResults=${MAX_MESSAGES_PER_SITE}`;
     const listRes = await fetch(listUrl, { headers: auth });
     if (!listRes.ok) {
       const txt = await listRes.text();
@@ -480,7 +514,7 @@ async function runScheduledSync(env: Env): Promise<Response> {
     for (const m of msgs) {
       if (processedForSite >= MAX_ATTACHMENTS_PER_SITE) break;
 
-      const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(user)}/messages/${m.id}?format=full`, { headers: auth });
+      const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(siteGmailUser)}/messages/${m.id}?format=full`, { headers: auth });
       if (!msgRes.ok) continue;
       const msg = (await msgRes.json()) as any;
 
@@ -502,7 +536,7 @@ async function runScheduledSync(env: Env): Promise<Response> {
         const aid = p.body?.attachmentId;
         if (!aid) continue;
 
-        const attRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(user)}/messages/${m.id}/attachments/${aid}`, { headers: auth });
+        const attRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(siteGmailUser)}/messages/${m.id}/attachments/${aid}`, { headers: auth });
         if (!attRes.ok) continue;
         const att = (await attRes.json()) as { data?: string };
         if (!att.data) continue;

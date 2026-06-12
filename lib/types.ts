@@ -10,6 +10,7 @@ export interface Site {
   ipack_email: string | null;
   gmail_sync_enabled: boolean;
   gmail_query: string | null;
+  sync_gmail_account: string | null;
   is_active: boolean;
   created_at: string;
 }

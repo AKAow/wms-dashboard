@@ -19,6 +19,7 @@ type SiteForm = {
   ipack_email: string;
   gmail_sync_enabled: boolean;
   gmail_query: string;
+  sync_gmail_account: string;
   is_active: boolean;
 };
 const emptyForm: SiteForm = {
@@ -31,6 +32,7 @@ const emptyForm: SiteForm = {
   ipack_email: "",
   gmail_sync_enabled: false,
   gmail_query: "",
+  sync_gmail_account: "",
   is_active: true,
 };
 
@@ -66,6 +68,7 @@ export default function SitesContent() {
       ipack_email: site.ipack_email ?? "",
       gmail_sync_enabled: site.gmail_sync_enabled ?? false,
       gmail_query: site.gmail_query ?? "",
+      sync_gmail_account: site.sync_gmail_account ?? "",
       is_active: site.is_active,
     });
     setEditSite(site); setError(""); setModal("edit");
@@ -90,6 +93,7 @@ export default function SitesContent() {
       ipack_email: form.ipack_email || null,
       gmail_sync_enabled: form.gmail_sync_enabled,
       gmail_query: form.gmail_query.trim() || null,
+      sync_gmail_account: form.sync_gmail_account.trim() || null,
       is_active: form.is_active,
     };
 
@@ -261,6 +265,11 @@ export default function SitesContent() {
                   className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${form.gmail_sync_enabled ? "bg-blue-600" : "bg-slate-300"}`}>
                   <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${form.gmail_sync_enabled ? "translate-x-5" : "translate-x-0.5"}`} />
                 </button>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">수신 Gmail 계정</label>
+                <input className={inp} value={form.sync_gmail_account} onChange={e => setForm({...form,sync_gmail_account:e.target.value})} placeholder="gongjudonghae@gmail.com" />
+                <p className="text-[11px] text-slate-500 mt-1">비워두면 기본 계정(windtreeeng@gmail.com)을 사용합니다.</p>
               </div>
               <div>
                 <label className="block text-xs text-slate-500 mb-1">Gmail 검색 조건(선택)</label>
