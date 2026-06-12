@@ -590,6 +590,73 @@ const worker = {
       return new Response(await res.text(), { status: res.status, headers: { ...cors, "Content-Type": "application/json" } });
     }
 
+    if (url.pathname === "/worker-secrets" && request.method === "GET") {
+      const slots = [
+        { slot: "default", userKey: "GMAIL_USER", tokenKey: "GMAIL_REFRESH_TOKEN" },
+        { slot: "2",       userKey: "GMAIL_USER_2", tokenKey: "GMAIL_REFRESH_TOKEN_2" },
+        { slot: "3",       userKey: "GMAIL_USER_3", tokenKey: "GMAIL_REFRESH_TOKEN_3" },
+      ] as const;
+      const accounts = slots.map(({ slot, userKey, tokenKey }) => ({
+        slot,
+        userKey,
+        tokenKey,
+        email: (env as unknown as Record<string, string | undefined>)[userKey] ?? null,
+        set: !!(env as unknown as Record<string, string | undefined>)[userKey],
+      }));
+      return new Response(JSON.stringify({ ok: true, accounts }), { headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname === "/worker-secrets" && request.method === "POST") {
+      const apiToken = env.CLOUDFLARE_API_TOKEN;
+      const accountId = env.CLOUDFLARE_ACCOUNT_ID;
+      const scriptName = env.CLOUDFLARE_SCRIPT_NAME || "wms-rld-worker";
+      if (!apiToken || !accountId) {
+        return new Response(JSON.stringify({ error: "CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not configured" }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+      const cfBase = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${scriptName}/secrets`;
+      const cfHeaders = { "Authorization": `Bearer ${apiToken}`, "Content-Type": "application/json" };
+
+      const body = (await request.json().catch(() => ({}))) as { action?: string; slot?: string; email?: string; refreshToken?: string };
+      const { action, slot } = body;
+
+      if (!slot || slot === "default") {
+        return new Response(JSON.stringify({ error: "기본 계정은 변경할 수 없습니다" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+      const suffix = slot === "2" ? "_2" : slot === "3" ? "_3" : null;
+      if (!suffix) {
+        return new Response(JSON.stringify({ error: "slot은 2 또는 3만 허용됩니다" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
+      if (action === "set") {
+        const { email, refreshToken } = body;
+        if (!email || !refreshToken) {
+          return new Response(JSON.stringify({ error: "email과 refreshToken 필요" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+        }
+        const [r1, r2] = await Promise.all([
+          fetch(cfBase, { method: "PUT", headers: cfHeaders, body: JSON.stringify({ name: `GMAIL_USER${suffix}`, text: email, type: "secret_text" }) }),
+          fetch(cfBase, { method: "PUT", headers: cfHeaders, body: JSON.stringify({ name: `GMAIL_REFRESH_TOKEN${suffix}`, text: refreshToken, type: "secret_text" }) }),
+        ]);
+        if (!r1.ok || !r2.ok) {
+          const err = await (r1.ok ? r2 : r1).json().catch(() => ({})) as { errors?: { message: string }[] };
+          return new Response(JSON.stringify({ error: err?.errors?.[0]?.message || "Cloudflare API 오류" }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+        }
+        return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
+      if (action === "delete") {
+        const [r1, r2] = await Promise.all([
+          fetch(`${cfBase}/GMAIL_USER${suffix}`, { method: "DELETE", headers: cfHeaders }),
+          fetch(`${cfBase}/GMAIL_REFRESH_TOKEN${suffix}`, { method: "DELETE", headers: cfHeaders }),
+        ]);
+        if (!r1.ok && !r2.ok) {
+          return new Response(JSON.stringify({ error: "Cloudflare API 오류" }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+        }
+        return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
+      return new Response(JSON.stringify({ error: "action은 set 또는 delete" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
     if (url.pathname !== "/upload-rld" || request.method !== "POST") {
       return new Response("Not found", { status: 404, headers: cors });
     }

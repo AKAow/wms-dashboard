@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Plus, MapPin, Pencil, Activity, ArrowLeft, Loader2, FileUp } from "lucide-react";
+import { Plus, MapPin, Pencil, Trash2, Activity, ArrowLeft, Loader2, FileUp } from "lucide-react";
 import type { Site } from "@/lib/types";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteDetail from "./SiteDetail";
@@ -45,7 +45,7 @@ export default function SitesContent() {
   const [rldUploading, setRldUploading] = useState(false);
   const [rldResult, setRldResult] = useState<string>("");
   const supabase = createClient();
-  const { sites, reload, addSite, editSite: updateSiteById } = useSites(supabase);
+  const { sites, reload, addSite, editSite: updateSiteById, removeSite } = useSites(supabase);
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedId = searchParams.get("id");
@@ -191,10 +191,21 @@ export default function SitesContent() {
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <button onClick={() => openEdit(site)}
-                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-blue-50 transition-colors inline-flex">
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => openEdit(site)}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-blue-50 transition-colors inline-flex">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm(`"${site.name}" 사이트를 삭제하시겠습니까?\n관련 측정 데이터도 모두 삭제됩니다.`)) return;
+                        const res = await removeSite(site.id);
+                        if (res.error) alert(`삭제 실패: ${res.error.message}`);
+                      }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors inline-flex">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

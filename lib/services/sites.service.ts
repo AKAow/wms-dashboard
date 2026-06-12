@@ -28,3 +28,7 @@ export async function createSite(supabase: SupabaseClient, payload: SitePayload)
 export async function updateSite(supabase: SupabaseClient, siteId: string, payload: SitePayload) {
   return supabase.from("sites").update(payload).eq("id", siteId);
 }
+
+export async function deleteSite(supabase: SupabaseClient, siteId: string) {
+  return supabase.from("sites").delete().eq("id", siteId);
+}

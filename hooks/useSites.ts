@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Site } from "@/lib/types";
 import {
   createSite,
+  deleteSite,
   fetchSites,
   updateSite,
   type SitePayload,
@@ -37,5 +38,14 @@ export function useSites(supabase: SupabaseClient) {
     [reload, supabase],
   );
 
-  return { sites, setSites, reload, addSite, editSite };
+  const removeSite = useCallback(
+    async (siteId: string) => {
+      const res = await deleteSite(supabase, siteId);
+      if (!res.error) await reload();
+      return res;
+    },
+    [reload, supabase],
+  );
+
+  return { sites, setSites, reload, addSite, editSite, removeSite };
 }
