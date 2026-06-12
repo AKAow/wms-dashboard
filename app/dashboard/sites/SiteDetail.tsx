@@ -226,6 +226,8 @@ function WindRose({ data, label }: { data: Array<{ dir: number | null | undefine
 export default function SiteDetail({ site }: { site: Site }) {
   const [tab, setTab] = useState<Tab>("overview");
   const [windRoseDirCh, setWindRoseDirCh] = useState<"ch13" | "ch14" | "ch15" | "ch16">("ch13");
+  const [dailyWindRoseDirCh, setDailyWindRoseDirCh] = useState<"ch13" | "ch14" | "ch15" | "ch16">("ch13");
+  const [monthlyWindRoseDirCh, setMonthlyWindRoseDirCh] = useState<"ch13" | "ch14" | "ch15" | "ch16">("ch13");
   const [simPeriod, setSimPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
   const [simPreset, setSimPreset] = useState<"3M" | "6M" | "12M" | "custom">("6M");
   const [simStartDate, setSimStartDate] = useState(() => {
@@ -614,14 +616,35 @@ export default function SiteDetail({ site }: { site: Site }) {
   }, [monthRows]);
 
   const monthlyWindRoseData = useMemo(() => {
+    const SPEED_FOR_DIR: Record<string, string> = { ch13: "ch1", ch14: "ch3", ch15: "ch5", ch16: "ch7" };
+    const speedCh = SPEED_FOR_DIR[monthlyWindRoseDirCh];
     const dirByDate = new Map<string, number>();
     const speedByDate = new Map<string, number>();
     for (const r of selectedMonthStats) {
-      if (r.channel === "ch13" && typeof r.avg_value === "number") dirByDate.set(r.date, r.avg_value);
-      if (r.channel === "ch1" && typeof r.avg_value === "number") speedByDate.set(r.date, r.avg_value);
+      if (r.channel === monthlyWindRoseDirCh && typeof r.avg_value === "number") dirByDate.set(r.date, r.avg_value);
+      if (r.channel === speedCh && typeof r.avg_value === "number") speedByDate.set(r.date, r.avg_value);
     }
     const dates = new Set([...dirByDate.keys(), ...speedByDate.keys()]);
     return Array.from(dates).map((date) => ({ dir: dirByDate.get(date) ?? null, speed: speedByDate.get(date) ?? null }));
+  }, [selectedMonthStats, monthlyWindRoseDirCh]);
+
+  const monthlyWindRoseAllData = useMemo(() => {
+    const PAIRS = [
+      { dir: "ch13", speed: "ch1" },
+      { dir: "ch14", speed: "ch3" },
+      { dir: "ch15", speed: "ch5" },
+      { dir: "ch16", speed: "ch7" },
+    ] as const;
+    return PAIRS.flatMap(({ dir: dirCh, speed: speedCh }) => {
+      const dirByDate = new Map<string, number>();
+      const speedByDate = new Map<string, number>();
+      for (const r of selectedMonthStats) {
+        if (r.channel === dirCh && typeof r.avg_value === "number") dirByDate.set(r.date, r.avg_value);
+        if (r.channel === speedCh && typeof r.avg_value === "number") speedByDate.set(r.date, r.avg_value);
+      }
+      const dates = new Set([...dirByDate.keys(), ...speedByDate.keys()]);
+      return Array.from(dates).map((d) => ({ dir: dirByDate.get(d) ?? null, speed: speedByDate.get(d) ?? null }));
+    });
   }, [selectedMonthStats]);
 
   const monthWindDirVariability = useMemo(() => {
@@ -811,7 +834,8 @@ export default function SiteDetail({ site }: { site: Site }) {
     const scenario = getNearestScenarioByMw(turbineMw);
     return byDate.map((r) => {
       const v = r.avg_value as number;
-      const uncertaintyPct = r.data_count >= 100 ? 8 : r.data_count >= 50 ? 12 : 16;
+      const dc = r.data_count ?? 0;
+      const uncertaintyPct = dc >= 100 ? 8 : dc >= 50 ? 12 : 16;
       const p50raw = estimateDailyEnergyMwh({
         windSpeed: v,
         tempC: tempByDate.get(r.date),
@@ -820,7 +844,7 @@ export default function SiteDetail({ site }: { site: Site }) {
         assumptions: DEFAULT_SIMULATION_ASSUMPTIONS,
       });
       const { p50, p75, p90 } = estimatePValuesFromP50(p50raw, uncertaintyPct);
-      const quality = r.data_count >= 100 ? "정상" : r.data_count >= 50 ? "주의" : "낮음";
+      const quality = dc >= 100 ? "정상" : dc >= 50 ? "주의" : "낮음";
       return {
         date: r.date.slice(5),
         wind: v,
@@ -849,6 +873,26 @@ export default function SiteDetail({ site }: { site: Site }) {
     const dates = new Set([...dirByDate.keys(), ...speedByDate.keys()]);
     return Array.from(dates).map((d) => ({ dir: dirByDate.get(d) ?? null, speed: speedByDate.get(d) ?? null }));
   }, [overviewKpiPeriod, windRoseDirCh, dailyExcelData, dailyStats, selectedMonthStats]);
+
+  // 일별 WindRose — 선택 높이
+  const dailyWindRoseData = useMemo(() => {
+    const PAIRS: Record<"ch13"|"ch14"|"ch15"|"ch16", "ch1"|"ch3"|"ch5"|"ch7"> = { ch13: "ch1", ch14: "ch3", ch15: "ch5", ch16: "ch7" };
+    const speedCh = PAIRS[dailyWindRoseDirCh];
+    return dailyExcelData.map((m) => ({ dir: m[dailyWindRoseDirCh] as number | null | undefined, speed: m[speedCh] as number | null | undefined }));
+  }, [dailyExcelData, dailyWindRoseDirCh]);
+
+  // 일별 WindRose — 전체 높이 종합
+  const dailyWindRoseAllData = useMemo(() => {
+    const PAIRS = [
+      { dir: "ch13" as const, speed: "ch1" as const },
+      { dir: "ch14" as const, speed: "ch3" as const },
+      { dir: "ch15" as const, speed: "ch5" as const },
+      { dir: "ch16" as const, speed: "ch7" as const },
+    ];
+    return PAIRS.flatMap(({ dir, speed }) =>
+      dailyExcelData.map((m) => ({ dir: m[dir], speed: m[speed] }))
+    );
+  }, [dailyExcelData]);
 
   // Overview WindRose — 전체 높이 종합 (ch13↔ch1, ch14↔ch3, ch15↔ch5, ch16↔ch7)
   const overviewWindRoseAllData = useMemo(() => {
@@ -951,7 +995,8 @@ export default function SiteDetail({ site }: { site: Site }) {
 
     return baseRows.map((r) => {
       const v = r.avg_value as number;
-      const uncertaintyPct = r.data_count >= 100 ? 8 : r.data_count >= 50 ? 12 : 16;
+      const dc2 = r.data_count ?? 0;
+      const uncertaintyPct = dc2 >= 100 ? 8 : dc2 >= 50 ? 12 : 16;
       const p50raw = estimateDailyEnergyMwh({
         windSpeed: v,
         tempC: tempByDate.get(r.date),
@@ -1467,8 +1512,26 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
-              <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />Wind Direction Rose</h3>
-              <WindRose data={dailyExcelData.map((m) => ({ dir: m.ch13, speed: m.ch1 }))} />
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />Wind Direction Rose</h3>
+                <select
+                  value={dailyWindRoseDirCh}
+                  onChange={(e) => setDailyWindRoseDirCh(e.target.value as "ch13" | "ch14" | "ch15" | "ch16")}
+                  className="rounded-lg border border-[#d6e8ff] bg-white px-2 py-1 text-xs text-slate-700"
+                >
+                  <option value="ch13">97m (ch13)</option>
+                  <option value="ch14">77m (ch14)</option>
+                  <option value="ch15">57m (ch15)</option>
+                  <option value="ch16">37m (ch16)</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <WindRose data={dailyWindRoseAllData} label="전 높이 종합" />
+                <WindRose
+                  data={dailyWindRoseData}
+                  label={dailyWindRoseDirCh === "ch13" ? "97m" : dailyWindRoseDirCh === "ch14" ? "77m" : dailyWindRoseDirCh === "ch15" ? "57m" : "37m"}
+                />
+              </div>
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
@@ -1579,8 +1642,26 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
-              <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />Wind Direction Rose</h3>
-              <WindRose data={monthlyWindRoseData} />
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />Wind Direction Rose</h3>
+                <select
+                  value={monthlyWindRoseDirCh}
+                  onChange={(e) => setMonthlyWindRoseDirCh(e.target.value as "ch13" | "ch14" | "ch15" | "ch16")}
+                  className="rounded-lg border border-[#d6e8ff] bg-white px-2 py-1 text-xs text-slate-700"
+                >
+                  <option value="ch13">97m (ch13)</option>
+                  <option value="ch14">77m (ch14)</option>
+                  <option value="ch15">57m (ch15)</option>
+                  <option value="ch16">37m (ch16)</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <WindRose data={monthlyWindRoseAllData} label="전 높이 종합" />
+                <WindRose
+                  data={monthlyWindRoseData}
+                  label={monthlyWindRoseDirCh === "ch13" ? "97m" : monthlyWindRoseDirCh === "ch14" ? "77m" : monthlyWindRoseDirCh === "ch15" ? "57m" : "37m"}
+                />
+              </div>
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
