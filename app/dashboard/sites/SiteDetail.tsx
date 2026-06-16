@@ -6,6 +6,7 @@ import { MapPin, Activity, Wind, Navigation, BarChart2, Table2, CalendarDays, Se
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import * as XLSX from "xlsx";
 import type { Site, DailyStat, Measurement } from "@/lib/types";
+import type { TurbineScenario } from "@/lib/simulation-types";
 import { CHANNEL_LABELS } from "@/lib/types";
 import { DEFAULT_SIMULATION_ASSUMPTIONS, MET_MAST_GRADE_RULES, STANDARD_TURBINE_SCENARIOS } from "@/lib/simulation-constants";
 import { estimateDailyEnergyMwh, estimatePValuesFromP50, getNearestScenarioByMw, interpolatePowerKw } from "@/lib/simulation-engine";
@@ -238,6 +239,8 @@ export default function SiteDetail({ site }: { site: Site }) {
   const [simEndDate, setSimEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [turbineAgeBand, setTurbineAgeBand] = useState<"0-5" | "6-10" | "11-15" | "16+">("6-10");
   const [turbineMw, setTurbineMw] = useState<number>(4.2);
+  const [selectedScenarioKey, setSelectedScenarioKey] = useState<string>("M-4.2-IEC2");
+  const [dbTurbineCurves, setDbTurbineCurves] = useState<TurbineScenario[]>([]);
   const [selectedDate, setSelectedDate] = useState(formatKSTDate());
   const [selectedMonth, setSelectedMonth] = useState(formatKSTMonth());
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -247,6 +250,39 @@ export default function SiteDetail({ site }: { site: Site }) {
   const dateInputRef = useRef<HTMLInputElement>(null);
   const monthInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
+
+  // DB 커스텀 커브 로드
+  useEffect(() => {
+    supabase.from("turbine_curves").select("*").order("created_at", { ascending: true }).then(({ data }) => {
+      if (!data) return;
+      setDbTurbineCurves(
+        (data as Array<{ id: string; name: string; rated_mw: number; iec_class: string | null; cut_in: number; rated_speed: number; cut_out: number; hub_height_m: number | null; rotor_diameter_m: number | null; curve_data: import("@/lib/simulation-types").PowerCurvePoint[]; notes: string | null }>).map((r) => ({
+          key: r.id,
+          name: r.name,
+          ratedMw: r.rated_mw,
+          iecClass: (r.iec_class ?? "II") as "I" | "II" | "III" | "I/II",
+          cutIn: r.cut_in,
+          ratedSpeed: r.rated_speed,
+          cutOut: r.cut_out,
+          hubHeightM: r.hub_height_m ?? 100,
+          rotorDiameterM: r.rotor_diameter_m ?? 130,
+          powerCurve: r.curve_data,
+          notes: r.notes ?? undefined,
+          isCustom: true,
+        }))
+      );
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const allScenarios = useMemo(
+    () => [...STANDARD_TURBINE_SCENARIOS, ...dbTurbineCurves],
+    [dbTurbineCurves]
+  );
+
+  const selectedScenario = useMemo(
+    () => allScenarios.find((s) => s.key === selectedScenarioKey) ?? allScenarios.find((s) => s.key === "M-4.2-IEC2") ?? allScenarios[0],
+    [allScenarios, selectedScenarioKey]
+  );
 
   const loadMeasurements = useCallback(async () => {
     setLoading(true);
@@ -881,7 +917,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       .filter((r) => r.channel === "ch1" && typeof r.avg_value === "number")
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    const scenario = getNearestScenarioByMw(turbineMw);
+    const scenario = selectedScenario;
     return byDate.map((r) => {
       const v = r.avg_value as number;
       const dc = r.data_count ?? 0;
@@ -904,7 +940,7 @@ export default function SiteDetail({ site }: { site: Site }) {
         quality,
       };
     });
-  }, [monthRows, turbineMw, tempByDate, pressureByDate]);
+  }, [monthRows, selectedScenario, tempByDate, pressureByDate]);
 
   // Overview WindRose — 선택 높이
   const overviewWindRoseData = useMemo(() => {
@@ -980,7 +1016,7 @@ export default function SiteDetail({ site }: { site: Site }) {
     }
 
     const monthMap = new Map<string, { date: string; windSum: number; p50Sum: number; p75Sum: number; p90Sum: number; count: number; qualityScore: number }>();
-    const scenario = getNearestScenarioByMw(turbineMw);
+    const scenario = selectedScenario;
     for (const row of dailyStats.filter((r) => r.channel === "ch1" && typeof r.avg_value === "number")) {
       const key = row.date.slice(0, 7);
       const v = row.avg_value as number;
@@ -1010,7 +1046,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       p90: r.p90Sum,
       quality: r.qualityScore >= r.count * 1.5 ? "정상" : r.qualityScore >= r.count ? "주의" : "낮음",
     }));
-  }, [estimateDailyRows, overviewKpiPeriod, dailyStats, turbineMw, tempByDate, pressureByDate]);
+  }, [estimateDailyRows, overviewKpiPeriod, dailyStats, selectedScenario, tempByDate, pressureByDate]);
 
   const effectiveSimDates = useMemo(() => {
     if (simPreset === "custom") return { start: simStartDate, end: simEndDate };
@@ -1032,7 +1068,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       })
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    const scenario = getNearestScenarioByMw(turbineMw);
+    const scenario = selectedScenario;
     const ageLossPct = Math.round(AGE_LOSS_MAP[turbineAgeBand] * 100);
 
     const longWindRows = dailyStats
@@ -1059,7 +1095,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       const { p50, p75, p90 } = estimatePValuesFromP50(p50adj, uncertaintyPct);
       return { date: r.date, wind: v, p50, p75, p90 };
     });
-  }, [dailyStats, effectiveSimDates, turbineAgeBand, turbineMw, tempByDate, pressureByDate]);
+  }, [dailyStats, effectiveSimDates, turbineAgeBand, selectedScenario, tempByDate, pressureByDate]);
 
   const mcpLiteSummary = useMemo(() => {
     const longWindRows = dailyStats
@@ -1193,11 +1229,11 @@ export default function SiteDetail({ site }: { site: Site }) {
     else if (wind >= 5.8 && p90Ratio >= 0.8 && coverage >= 70) range = [4.5, 5.6];
     else if (wind >= 5.5 && p90Ratio >= 0.78 && coverage >= 60) range = [4.0, 5.0];
 
-    const inRange = turbineMw >= range[0] && turbineMw <= range[1];
+    const inRange = selectedScenario.ratedMw >= range[0] && selectedScenario.ratedMw <= range[1];
 
     let summary = `현재 조건의 현실적 용량 범위는 ${range[0].toFixed(1)}~${range[1].toFixed(1)}MW로 추정됩니다.`;
     if (!inRange) {
-      summary += ` 선택값 ${turbineMw.toFixed(1)}MW는 권장 범위를 벗어납니다.`;
+      summary += ` 선택값 ${selectedScenario.ratedMw.toFixed(1)}MW는 권장 범위를 벗어납니다.`;
     }
 
     if (coverage < 60) summary += ` 데이터 커버리지(${coverage}%)가 낮아 신뢰도는 제한적입니다.`;
@@ -1214,7 +1250,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       range,
       inRange,
     };
-  }, [simulationSummary, monthCoverage, turbineMw]);
+  }, [simulationSummary, monthCoverage, selectedScenario]);
 
   const simulationConclusion = useMemo(() => {
     const p90ratio = simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0;
@@ -1236,7 +1272,7 @@ export default function SiteDetail({ site }: { site: Site }) {
     const k = Math.pow(sigma / mu, -1.086);
     const A = mu / gammaLanczos(1 + 1 / k);
 
-    const scenario = getNearestScenarioByMw(turbineMw);
+    const scenario = selectedScenario;
     const totalLossPct =
       DEFAULT_SIMULATION_ASSUMPTIONS.availabilityLossPct +
       DEFAULT_SIMULATION_ASSUMPTIONS.electricalLossPct +
@@ -1269,7 +1305,7 @@ export default function SiteDetail({ site }: { site: Site }) {
     const p90 = aepNetGwh * uncertaintyBreakdown.p90p50;
 
     return { k, A, mu, n, aepGrossGwh, aepNetGwh, cf, p75, p90, scenario: scenario.name, totalLossPct };
-  }, [dailyStats, turbineMw, simulationSummary.loss, uncertaintyBreakdown]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dailyStats, selectedScenario, simulationSummary.loss, uncertaintyBreakdown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const downloadPreFeasibilityReport = useCallback(() => {
     const wb = XLSX.utils.book_new();
@@ -1279,7 +1315,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       ["생성시각(KST)", simulationMeta.generatedAt],
       ["사이트", `${site.name} (${site.site_number})`],
       ["기간", `${effectiveSimDates.start} ~ ${effectiveSimDates.end}`],
-      ["표준터빈(MW)", turbineMw.toFixed(1)],
+      ["터빈", `${selectedScenario.name} (${selectedScenario.ratedMw.toFixed(1)}MW)`],
       ["풍황 신뢰도 등급", metMastQuality.grade],
       ["월 커버리지(%)", metMastQuality.coverage],
       ["고품질 일비율(%)", metMastQuality.highQualityPct],
@@ -1301,7 +1337,7 @@ export default function SiteDetail({ site }: { site: Site }) {
     site.name,
     site.site_number,
     effectiveSimDates,
-    turbineMw,
+    selectedScenario,
     metMastQuality,
     mcpLiteSummary.factor,
     uncertaintyBreakdown,
@@ -1947,11 +1983,20 @@ export default function SiteDetail({ site }: { site: Site }) {
                   </select>
                 </label>
                 <label className="space-y-1 block">
-                  <span className="text-[11px] tracking-wide text-slate-500">표준 터빈 시나리오</span>
-                  <select value={String(turbineMw)} onChange={(e) => setTurbineMw(Number(e.target.value))} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
-                    {STANDARD_TURBINE_SCENARIOS.map((s) => (
-                      <option key={s.key} value={s.ratedMw}>{s.name} · {s.ratedMw.toFixed(1)}MW · IEC {s.iecClass}</option>
-                    ))}
+                  <span className="text-[11px] tracking-wide text-slate-500">터빈 시나리오</span>
+                  <select value={selectedScenarioKey} onChange={(e) => { setSelectedScenarioKey(e.target.value); const sc = allScenarios.find((s) => s.key === e.target.value); if (sc) setTurbineMw(sc.ratedMw); }} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
+                    <optgroup label="내장 기종">
+                      {STANDARD_TURBINE_SCENARIOS.map((s) => (
+                        <option key={s.key} value={s.key}>{s.name} · {s.ratedMw.toFixed(1)}MW</option>
+                      ))}
+                    </optgroup>
+                    {dbTurbineCurves.length > 0 && (
+                      <optgroup label="커스텀 커브 (DB)">
+                        {dbTurbineCurves.map((s) => (
+                          <option key={s.key} value={s.key}>{s.name} · {s.ratedMw.toFixed(1)}MW{s.notes ? ` (${s.notes})` : ""}</option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 </label>
               </div>

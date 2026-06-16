@@ -4,13 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { LayoutDashboard, MapPin, Users, Database, Settings, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, MapPin, Users, Database, Settings, LogOut, Menu, X, Wind } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
   { href: "/dashboard/sites", label: "사이트 관리", icon: MapPin },
   { href: "/dashboard/users", label: "사용자 관리", icon: Users },
   { href: "/dashboard/data", label: "데이터 관리", icon: Database },
+  { href: "/dashboard/turbines", label: "터빈 파워커브", icon: Wind },
   { href: "/dashboard/settings", label: "설정", icon: Settings },
 ];
 

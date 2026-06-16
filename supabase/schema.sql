@@ -54,6 +54,38 @@ CREATE TABLE IF NOT EXISTS measurements (
   UNIQUE(site_id, timestamp)
 );
 
+-- 커스텀 터빈 파워커브
+CREATE TABLE IF NOT EXISTS turbine_curves (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  rated_mw NUMERIC NOT NULL,
+  iec_class TEXT,
+  cut_in NUMERIC DEFAULT 3,
+  rated_speed NUMERIC DEFAULT 12,
+  cut_out NUMERIC DEFAULT 25,
+  hub_height_m INTEGER,
+  rotor_diameter_m INTEGER,
+  curve_data JSONB NOT NULL, -- [{ws: number, kw: number}]
+  notes TEXT,
+  is_builtin BOOLEAN DEFAULT false,
+  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE turbine_curves ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "turbine_curves_read" ON turbine_curves
+  FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "turbine_curves_admin" ON turbine_curves
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM auth.users
+      WHERE id = auth.uid() AND raw_user_meta_data->>'role' = 'admin'
+    )
+  );
+
 -- 데이터 업로드 이력
 CREATE TABLE IF NOT EXISTS upload_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,12 +1,13 @@
-export type TurbineScenarioKey = "S-3.6-IEC3" | "M-4.2-IEC2" | "L-5.0-IEC1_2";
+export type TurbineScenarioKey = string;
 
 export interface PowerCurvePoint {
-  ws: number; // wind speed (m/s)
-  kw: number; // power output (kW)
+  ws: number;
+  kw: number;
 }
 
 export interface TurbineScenario {
   key: TurbineScenarioKey;
+  isCustom?: boolean;
   name: string;
   ratedMw: number;
   iecClass: "I" | "II" | "III" | "I/II";
