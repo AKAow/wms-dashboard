@@ -1437,7 +1437,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
                   onKeyDown={(e) => e.preventDefault()}
-                  onFocus={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
+                  onFocus={undefined}
                   className="rounded-xl border border-[#c8def8] bg-white/70 px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
                 />
                 <button
@@ -1553,7 +1553,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
                   onKeyDown={(e) => e.preventDefault()}
-                  onFocus={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
+                  onFocus={undefined}
                   className="rounded-xl border border-[#c8def8] bg-white/70 px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
                 />
                 <button
