@@ -1415,7 +1415,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             )}
           </div>
 
-          <div className="grid grid-cols-[1.5fr_1fr] gap-3 items-stretch">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-3 items-stretch">
             <div className="panel">
               <div className="panel-head">
                 <div>
@@ -1433,7 +1433,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <option value="ch16">37m (ch16)</option>
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <WindRose data={overviewWindRoseAllData} label="전 높이 종합" />
                 <WindRose
                   data={overviewWindRoseData}
@@ -1621,7 +1621,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <option value="ch16">37m (ch16)</option>
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <WindRose data={dailyWindRoseAllData} label="전 높이 종합" />
                 <WindRose
                   data={dailyWindRoseData}
@@ -1751,7 +1751,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <option value="ch16">37m (ch16)</option>
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <WindRose data={monthlyWindRoseAllData} label="전 높이 종합" />
                 <WindRose
                   data={monthlyWindRoseData}
@@ -1923,7 +1923,7 @@ export default function SiteDetail({ site }: { site: Site }) {
           </div>
 
           <div className="overflow-x-auto">
-            <div className="grid grid-cols-[repeat(3,minmax(320px,1fr))] gap-2 min-w-[980px]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             <div className="min-w-0 rounded-lg border border-[#d6e8ff] bg-white/70 p-2.5">
               <div className="text-slate-500 text-xs mb-2">핵심 지표</div>
               <div className="space-y-2 text-xs">

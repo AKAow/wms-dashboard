@@ -118,6 +118,16 @@ body {
 }
 
 @media (max-width: 720px) {
-  .sitekit .kpi-row { grid-template-columns: 1fr; }
+  .sitekit .kpi-row { grid-template-columns: repeat(2, 1fr); }
   .sitekit .page-head { flex-direction: column; align-items: flex-start; }
+  .sitekit .page-head h1 { font-size: 22px; }
+  .sitekit .topbar { flex-wrap: wrap; gap: 8px; }
+  .sitekit .search { width: 100%; order: 3; }
+  .sitekit .k-num { font-size: 30px; }
+}
+
+@media (max-width: 480px) {
+  .sitekit .kpi-row { grid-template-columns: 1fr; }
+  .sitekit .kpi-card { padding: 14px 16px; }
+  .sitekit .search { display: none; }
 }
