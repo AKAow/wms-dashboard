@@ -265,16 +265,16 @@ export default function SiteDetail({ site }: { site: Site }) {
 
   const loadMonthlyStats = useCallback(async () => {
     setLoading(true);
-    const allMeasurements: Measurement[] = [];
+    const allStats: DailyStat[] = [];
     const pageSize = 1000;
     let from = 0;
 
     while (true) {
       const { data, error } = await supabase
-        .from("measurements")
-        .select("*")
+        .from("daily_stats")
+        .select("id,site_id,date,channel,avg_value,max_value,min_value,std_value,data_count")
         .eq("site_id", site.id)
-        .order("timestamp")
+        .order("date")
         .range(from, from + pageSize - 1);
 
       if (error) {
@@ -282,48 +282,14 @@ export default function SiteDetail({ site }: { site: Site }) {
         return;
       }
 
-      const batch = data ?? [];
-      allMeasurements.push(...batch);
+      const batch = (data ?? []) as DailyStat[];
+      allStats.push(...batch);
       if (batch.length < pageSize) break;
       from += pageSize;
     }
 
-    const statsMap: Record<string, { sum: number; count: number; min: number; max: number; sumSq: number }> = {};
-    allMeasurements.forEach((m) => {
-      const day = toUTCDateOnly(m.timestamp);
-      EXCEL_DISPLAY_CHANNELS.forEach((ch) => {
-        const value = m[ch as keyof Measurement] as number | null;
-        if (typeof value !== "number") return;
-        const key = `${day}|${ch}`;
-        if (!statsMap[key]) statsMap[key] = { sum: 0, count: 0, min: value, max: value, sumSq: 0 };
-        const s = statsMap[key];
-        s.sum += value;
-        s.count += 1;
-        s.min = Math.min(s.min, value);
-        s.max = Math.max(s.max, value);
-        s.sumSq += value * value;
-      });
-    });
-
-    const computed: DailyStat[] = Object.entries(statsMap).map(([key, s]) => {
-      const [date, channel] = key.split("|");
-      const avg = s.count ? s.sum / s.count : null;
-      const variance = s.count && avg != null ? s.sumSq / s.count - avg * avg : null;
-      return {
-        id: `${site.id}-${date}-${channel}`,
-        site_id: site.id,
-        date,
-        channel,
-        avg_value: avg,
-        max_value: s.count ? s.max : null,
-        min_value: s.count ? s.min : null,
-        std_value: variance != null ? Math.sqrt(Math.max(variance, 0)) : null,
-        data_count: s.count,
-      };
-    });
-
-    computed.sort((a, b) => (a.date === b.date ? a.channel.localeCompare(b.channel) : a.date.localeCompare(b.date)));
-    setDailyStats(computed);
+    allStats.sort((a, b) => (a.date === b.date ? a.channel.localeCompare(b.channel) : a.date.localeCompare(b.date)));
+    setDailyStats(allStats);
     setLoading(false);
   }, [site.id, supabase]);
 

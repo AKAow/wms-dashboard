@@ -181,12 +181,15 @@ async function hasUploadHistory(env: Env, fileName: string): Promise<boolean> {
   return d.length > 0;
 }
 
+let _nrgTokenCache: string | null = null;
+
 async function processRldFile(env: Env, fileName: string, fileBuffer: ArrayBuffer, source = "worker-auto") {
   const already = await hasUploadHistory(env, fileName);
   if (already) return { ok: true, skipped: true, file_name: fileName };
 
   const snFromName = fileName.match(/^(\d+)_/)?.[1] ?? null;
-  const token = await getNRGToken(env.NRG_CLIENT_ID, env.NRG_CLIENT_SECRET);
+  if (!_nrgTokenCache) _nrgTokenCache = await getNRGToken(env.NRG_CLIENT_ID, env.NRG_CLIENT_SECRET);
+  const token = _nrgTokenCache;
   if (!token) throw new Error("NRG 토큰 발급 실패");
 
   const zipBuf = await convertRLD(token, toBase64(fileBuffer));
@@ -227,7 +230,7 @@ async function processRldFile(env: Env, fileName: string, fileBuffer: ArrayBuffe
   }
 
   const statsMap = new Map<string, { [ch: string]: { sum: number; max: number; min: number; count: number; vals: number[] } }>();
-  const CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch13"];
+  const CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7", "ch8", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"];
 
   for (const r of rows) {
     const ts = String(r.timestamp || "");
@@ -449,13 +452,13 @@ async function setCronConfig(env: Env, dayKst: string, hourKst = 10, minuteKst =
   return new Response(JSON.stringify({ ok: true, cron, dayKst, hourKst, minuteKst }));
 }
 
-async function runScheduledSync(env: Env): Promise<Response> {
+async function runScheduledSync(env: Env, filterSiteNumber?: string, queryOverride?: string): Promise<Response> {
   const defaultUser = env.GMAIL_USER || "windtreeeng@gmail.com";
 
-  const siteRes = await sbFetch(
-    env,
-    "/rest/v1/sites?select=id,name,site_number,gmail_sync_enabled,gmail_query,sync_gmail_account,is_active&gmail_sync_enabled=eq.true&is_active=eq.true",
-  );
+  let sitesPath = "/rest/v1/sites?select=id,name,site_number,gmail_sync_enabled,gmail_query,sync_gmail_account,is_active&gmail_sync_enabled=eq.true&is_active=eq.true";
+  if (filterSiteNumber) sitesPath += `&site_number=eq.${encodeURIComponent(filterSiteNumber)}`;
+
+  const siteRes = await sbFetch(env, sitesPath);
   if (!siteRes.ok) {
     const txt = await siteRes.text();
     return new Response(JSON.stringify({ ok: false, error: "site-config-read-failed", detail: txt }), { status: 500 });
@@ -509,12 +512,12 @@ async function runScheduledSync(env: Env): Promise<Response> {
     }
     const auth = { Authorization: `Bearer ${siteToken}` };
 
-    const siteQuery = site.gmail_query?.trim();
+    const siteQuery = queryOverride?.trim() || site.gmail_query?.trim();
     const defaultQuery = `has:attachment filename:rld filename:${site.site_number}_ newer_than:14d`;
     const q = encodeURIComponent(siteQuery && siteQuery.length > 0 ? siteQuery : defaultQuery);
 
-    const PAGE_SIZE = 5;
-    const MAX_PAGES = 4; // 페이지당 5개 × 4페이지 = 최대 20개 스캔 (1101 방지)
+    const PAGE_SIZE = 3;
+    const MAX_PAGES = 2; // 페이지당 3개 × 2페이지 = 최대 6개 스캔 (서브리퀘스트 절약)
     let pageToken: string | undefined;
     let pagesChecked = 0;
     let processedForSite = 0;
@@ -611,8 +614,14 @@ const worker = {
     }
 
     if (url.pathname === "/sync-rld" && request.method === "POST") {
-      const res = await runScheduledSync(env);
-      return new Response(await res.text(), { status: res.status, headers: { ...cors, "Content-Type": "application/json" } });
+      try {
+        const body = (await request.json().catch(() => ({}))) as { siteNumber?: string; queryOverride?: string };
+        const res = await runScheduledSync(env, body.siteNumber, body.queryOverride);
+        return new Response(await res.text(), { status: res.status, headers: { ...cors, "Content-Type": "application/json" } });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return new Response(JSON.stringify({ ok: false, error: "sync-exception", detail: msg }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
+      }
     }
 
     if (url.pathname === "/worker-secrets" && request.method === "GET") {

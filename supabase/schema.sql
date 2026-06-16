@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS sites (
   ipack_email TEXT,
   gmail_sync_enabled BOOLEAN DEFAULT false,
   gmail_query TEXT,
+  sync_gmail_account TEXT,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -70,6 +71,7 @@ CREATE TABLE IF NOT EXISTS upload_history (
 -- 기존 운영 DB 마이그레이션(안전)
 ALTER TABLE sites ADD COLUMN IF NOT EXISTS gmail_sync_enabled BOOLEAN DEFAULT false;
 ALTER TABLE sites ADD COLUMN IF NOT EXISTS gmail_query TEXT;
+ALTER TABLE sites ADD COLUMN IF NOT EXISTS sync_gmail_account TEXT;
 
 -- RLS 활성화
 ALTER TABLE sites ENABLE ROW LEVEL SECURITY;
