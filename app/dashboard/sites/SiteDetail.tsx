@@ -1215,10 +1215,14 @@ export default function SiteDetail({ site }: { site: Site }) {
                 </button>
               ))}
             </div>
-            <span className="text-xs text-slate-400">
-              {overviewKpiPeriod === "month" && selectedMonth}
-              {overviewKpiPeriod === "day" && selectedDate}
-            </span>
+            {overviewKpiPeriod === "month" && (
+              <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}
+                className="text-xs border border-[#c8def8] rounded-lg px-2 py-1 text-slate-700 bg-white focus:outline-none focus:border-blue-500" />
+            )}
+            {overviewKpiPeriod === "day" && (
+              <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)}
+                className="text-xs border border-[#c8def8] rounded-lg px-2 py-1 text-slate-700 bg-white focus:outline-none focus:border-blue-500" />
+            )}
           </div>
           <div className="kpi-row">
             <div className="kpi-card">
