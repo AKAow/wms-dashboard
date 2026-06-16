@@ -8,7 +8,7 @@ import * as XLSX from "xlsx";
 import type { Site, DailyStat, Measurement } from "@/lib/types";
 import { CHANNEL_LABELS } from "@/lib/types";
 import { DEFAULT_SIMULATION_ASSUMPTIONS, MET_MAST_GRADE_RULES, STANDARD_TURBINE_SCENARIOS } from "@/lib/simulation-constants";
-import { estimateDailyEnergyMwh, estimatePValuesFromP50, getNearestScenarioByMw } from "@/lib/simulation-engine";
+import { estimateDailyEnergyMwh, estimatePValuesFromP50, getNearestScenarioByMw, interpolatePowerKw } from "@/lib/simulation-engine";
 import { calculateMcpLiteFactor } from "@/lib/mcp-lite";
 
 type Tab = "overview" | "daily" | "monthly" | "simulation";
@@ -1221,6 +1221,56 @@ export default function SiteDetail({ site }: { site: Site }) {
     return `현재 평가는 ${simulationAssessment.grade}이며, 데이터 커버리지 ${monthCoverage}%, P90/P50 ${toFixedOrDash(p90ratio, 2)} 기준으로 ${simulationAdvice.summary}`;
   }, [simulationAssessment.grade, monthCoverage, simulationSummary.totalP50, simulationSummary.totalP90, simulationAdvice.summary]);
 
+  // ─── AEP 연간 발전량 추정 (전체 ch1 데이터 기반 Weibull 적분) ───
+  const aepEstimate = useMemo(() => {
+    const values = dailyStats
+      .filter((r) => r.channel === "ch1" && typeof r.avg_value === "number" && (r.avg_value as number) > 0)
+      .map((r) => r.avg_value as number);
+    if (values.length < 10) return null;
+
+    const n = values.length;
+    const mu = values.reduce((a, b) => a + b, 0) / n;
+    const sigma = Math.sqrt(values.reduce((s, v) => s + (v - mu) ** 2, 0) / n);
+    if (sigma <= 0 || mu <= 0) return null;
+
+    const k = Math.pow(sigma / mu, -1.086);
+    const A = mu / gammaLanczos(1 + 1 / k);
+
+    const scenario = getNearestScenarioByMw(turbineMw);
+    const totalLossPct =
+      DEFAULT_SIMULATION_ASSUMPTIONS.availabilityLossPct +
+      DEFAULT_SIMULATION_ASSUMPTIONS.electricalLossPct +
+      DEFAULT_SIMULATION_ASSUMPTIONS.wakeLossPct +
+      DEFAULT_SIMULATION_ASSUMPTIONS.curtailmentLossPct +
+      DEFAULT_SIMULATION_ASSUMPTIONS.icingLossPct +
+      DEFAULT_SIMULATION_ASSUMPTIONS.otherLossPct +
+      Math.round(simulationSummary.loss * 100);
+
+    const tempVals = dailyStats.filter((r) => r.channel === "ch22" && typeof r.avg_value === "number").map((r) => r.avg_value as number);
+    const pressVals = dailyStats.filter((r) => r.channel === "ch17" && typeof r.avg_value === "number").map((r) => r.avg_value as number);
+    const avgTemp = tempVals.length ? tempVals.reduce((a, b) => a + b, 0) / tempVals.length : 15;
+    const avgPress = pressVals.length ? pressVals.reduce((a, b) => a + b, 0) / pressVals.length : 1013.25;
+    const rho = (avgPress * 100) / (287.05 * (avgTemp + 273.15));
+    const densityRatio = Math.min(Math.max(rho / 1.225, 0.9), 1.1);
+
+    const dv = 0.1;
+    let aepKwh = 0;
+    for (let v = dv / 2; v < 30; v += dv) {
+      const pdf = v > 0 ? (k / A) * Math.pow(v / A, k - 1) * Math.exp(-Math.pow(v / A, k)) : 0;
+      const adjV = v * Math.cbrt(densityRatio);
+      const powerKw = interpolatePowerKw(adjV, scenario.powerCurve, scenario.cutIn, scenario.cutOut);
+      aepKwh += powerKw * pdf * dv * 8760;
+    }
+
+    const aepGrossGwh = aepKwh / 1e6;
+    const aepNetGwh = aepGrossGwh * (1 - totalLossPct / 100);
+    const cf = aepNetGwh / ((scenario.ratedMw * 8760) / 1e3);
+    const p75 = aepNetGwh * uncertaintyBreakdown.p75p50;
+    const p90 = aepNetGwh * uncertaintyBreakdown.p90p50;
+
+    return { k, A, mu, n, aepGrossGwh, aepNetGwh, cf, p75, p90, scenario: scenario.name, totalLossPct };
+  }, [dailyStats, turbineMw, simulationSummary.loss, uncertaintyBreakdown]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const downloadPreFeasibilityReport = useCallback(() => {
     const wb = XLSX.utils.book_new();
     const rows = [
@@ -1943,6 +1993,46 @@ export default function SiteDetail({ site }: { site: Site }) {
           </div>
 
           
+
+          {/* ── AEP 연간 발전량 추정 ── */}
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Wind className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm font-semibold text-slate-900">AEP 연간 발전량 추정</span>
+              <span className="text-xs text-slate-400">(전체 기간 ch1 · Weibull 적분)</span>
+            </div>
+            {!aepEstimate ? (
+              <p className="text-xs text-slate-500">ch1 일간 평균 데이터 10일 이상 필요합니다.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                  <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2.5">
+                    <div className="text-[11px] text-slate-500 mb-0.5">AEP P50</div>
+                    <div className="text-lg font-bold text-emerald-700">{aepEstimate.aepNetGwh.toFixed(2)} <span className="text-xs font-normal">GWh/yr</span></div>
+                  </div>
+                  <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2.5">
+                    <div className="text-[11px] text-slate-500 mb-0.5">AEP P75</div>
+                    <div className="text-lg font-bold text-slate-700">{aepEstimate.p75.toFixed(2)} <span className="text-xs font-normal">GWh/yr</span></div>
+                  </div>
+                  <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2.5">
+                    <div className="text-[11px] text-slate-500 mb-0.5">AEP P90</div>
+                    <div className="text-lg font-bold text-slate-700">{aepEstimate.p90.toFixed(2)} <span className="text-xs font-normal">GWh/yr</span></div>
+                  </div>
+                  <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2.5">
+                    <div className="text-[11px] text-slate-500 mb-0.5">설비이용률 (CF)</div>
+                    <div className="text-lg font-bold text-blue-700">{(aepEstimate.cf * 100).toFixed(1)} <span className="text-xs font-normal">%</span></div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-600">
+                  <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">Weibull k = {aepEstimate.k.toFixed(3)}</div>
+                  <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">Weibull A = {aepEstimate.A.toFixed(3)} m/s</div>
+                  <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">총 손실률 {aepEstimate.totalLossPct}%</div>
+                  <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">기준 터빈 {aepEstimate.scenario.split(" ").slice(1, 3).join(" ")}</div>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-2">데이터 {aepEstimate.n}일 · Gross {aepEstimate.aepGrossGwh.toFixed(2)} GWh · 순발전량 P50 기준</p>
+              </>
+            )}
+          </div>
 
           <details className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-700">
             <summary className="cursor-pointer font-semibold text-slate-900">근거 상세 보기</summary>
