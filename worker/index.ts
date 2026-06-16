@@ -5,6 +5,8 @@ export interface Env {
   NRG_CLIENT_SECRET: string;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
+  // /sync-rld 엔드포인트 보호용 시크릿 (선택 사항)
+  WORKER_SECRET?: string;
 
   // Gmail OAuth (optional but required for scheduled auto-sync)
   GMAIL_CLIENT_ID?: string;
@@ -614,6 +616,14 @@ const worker = {
     }
 
     if (url.pathname === "/sync-rld" && request.method === "POST") {
+      // WORKER_SECRET 설정된 경우에만 Bearer 토큰 인증 검사
+      if (env.WORKER_SECRET) {
+        const authHeader = request.headers.get("Authorization") ?? "";
+        const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+        if (token !== env.WORKER_SECRET) {
+          return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), { status: 401, headers: { ...cors, "Content-Type": "application/json" } });
+        }
+      }
       try {
         const body = (await request.json().catch(() => ({}))) as { siteNumber?: string; queryOverride?: string };
         const res = await runScheduledSync(env, body.siteNumber, body.queryOverride);

@@ -674,6 +674,90 @@ export default function SiteDetail({ site }: { site: Site }) {
   const maxGustTrend = useMemo(() => trendLabel(sparkMaxGust), [sparkMaxGust]);
   const dirTrend = useMemo(() => trendLabel(sparkDirVar), [sparkDirVar]);
 
+  // ─── Weibull 분포 파라미터 추정 (선택 월 ch1 일간 평균 풍속 기준) ───
+  // Lanczos 근사로 감마 함수 계산
+  const gammaLanczos = (z: number): number => {
+    const g = 7;
+    const c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+    if (z < 0.5) return Math.PI / (Math.sin(Math.PI * z) * gammaLanczos(1 - z));
+    const zz = z - 1;
+    let x = c[0];
+    for (let i = 1; i < g + 2; i++) x += c[i] / (zz + i);
+    const t = zz + g + 0.5;
+    return Math.sqrt(2 * Math.PI) * Math.pow(t, zz + 0.5) * Math.exp(-t) * x;
+  };
+
+  const weibullStats = useMemo(() => {
+    // 선택 월 ch1 avg_value 배열
+    const values = selectedMonthStats
+      .filter((r) => r.channel === "ch1" && typeof r.avg_value === "number" && (r.avg_value as number) > 0)
+      .map((r) => r.avg_value as number);
+    if (values.length < 3) return null;
+
+    const n = values.length;
+    const mu = values.reduce((a, b) => a + b, 0) / n;
+    const sigma = Math.sqrt(values.reduce((s, v) => s + (v - mu) ** 2, 0) / n);
+    if (sigma <= 0 || mu <= 0) return null;
+
+    // Method of Moments: k = (σ/μ)^-1.086
+    const k = Math.pow(sigma / mu, -1.086);
+    // A = μ / Γ(1 + 1/k)
+    const A = mu / gammaLanczos(1 + 1 / k);
+
+    // 히스토그램 빈(bin) 생성
+    const maxV = Math.max(...values);
+    const binCount = 10;
+    const binSize = maxV / binCount;
+    const bins = Array.from({ length: binCount }, (_, i) => {
+      const lo = i * binSize;
+      const hi = (i + 1) * binSize;
+      const count = values.filter((v) => v >= lo && (i === binCount - 1 ? v <= hi : v < hi)).length;
+      const freq = count / n;
+      // Weibull PDF: (k/A) * (x/A)^(k-1) * exp(-(x/A)^k)
+      const xMid = (lo + hi) / 2;
+      const pdf = xMid > 0 ? (k / A) * Math.pow(xMid / A, k - 1) * Math.exp(-Math.pow(xMid / A, k)) * binSize : 0;
+      return { bin: `${lo.toFixed(1)}~${hi.toFixed(1)}`, freq, pdf, xMid };
+    });
+
+    return { k, A, bins, mu, sigma, n };
+  }, [selectedMonthStats]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── 풍속 전단 분석 (Power Law) ───
+  // 기본 높이 매핑 (EXCEL_SENSOR_META 기반)
+  const SHEAR_HEIGHTS: Record<string, number> = { ch1: 100, ch2: 96, ch3: 80, ch4: 80, ch5: 60, ch6: 60, ch7: 40, ch8: 40 };
+
+  const windShearStats = useMemo(() => {
+    // 선택 월 각 채널별 평균 풍속 계산
+    const channelAvg = new Map<string, number>();
+    for (const ch of Object.keys(SHEAR_HEIGHTS)) {
+      const vals = selectedMonthStats
+        .filter((r) => r.channel === ch && typeof r.avg_value === "number" && (r.avg_value as number) > 0)
+        .map((r) => r.avg_value as number);
+      if (vals.length > 0) channelAvg.set(ch, vals.reduce((a, b) => a + b, 0) / vals.length);
+    }
+
+    // ch1(100m)과 ch7(40m) 쌍으로 α 계산
+    const v1 = channelAvg.get("ch1");
+    const v7 = channelAvg.get("ch7");
+    const h1 = SHEAR_HEIGHTS["ch1"];
+    const h7 = SHEAR_HEIGHTS["ch7"];
+
+    if (!v1 || !v7 || v1 <= 0 || v7 <= 0) return null;
+    const alpha = Math.log(v1 / v7) / Math.log(h1 / h7);
+
+    // 수직 풍속 프로파일 — 데이터 있는 채널만
+    const profile = Object.entries(SHEAR_HEIGHTS)
+      .filter(([ch]) => channelAvg.has(ch))
+      .map(([ch, height]) => ({
+        height,
+        speed: channelAvg.get(ch)!,
+        ch,
+      }))
+      .sort((a, b) => b.height - a.height); // 높이 내림차순
+
+    return { alpha, profile };
+  }, [selectedMonthStats]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 전체 기간 KPI
   const allAvgWind = useMemo(() => {
     const values = dailyStats.filter((r) => r.channel === "ch1" && typeof r.avg_value === "number").map((r) => r.avg_value as number);
@@ -1624,6 +1708,105 @@ export default function SiteDetail({ site }: { site: Site }) {
                   label={monthlyWindRoseDirCh === "ch13" ? "97m" : monthlyWindRoseDirCh === "ch14" ? "77m" : monthlyWindRoseDirCh === "ch15" ? "57m" : "37m"}
                 />
               </div>
+            </div>
+
+            {/* ── Weibull 분포 분석 ── */}
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
+              <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-blue-400" />Weibull 분포 분석 (ch1 · {selectedMonth})
+              </h3>
+              {!weibullStats ? (
+                <div className="text-center py-8 text-slate-500 text-sm">데이터 부족 (최소 3일 필요)</div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3">
+                      <div className="text-xs text-slate-500 mb-1">형상 계수 k</div>
+                      <div className="text-lg font-bold text-slate-900">{weibullStats.k.toFixed(3)}</div>
+                    </div>
+                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3">
+                      <div className="text-xs text-slate-500 mb-1">척도 계수 A (m/s)</div>
+                      <div className="text-lg font-bold text-slate-900">{weibullStats.A.toFixed(3)}</div>
+                    </div>
+                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3">
+                      <div className="text-xs text-slate-500 mb-1">평균 풍속 μ</div>
+                      <div className="text-lg font-bold text-slate-900">{weibullStats.mu.toFixed(2)} m/s</div>
+                    </div>
+                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3">
+                      <div className="text-xs text-slate-500 mb-1">표준편차 σ</div>
+                      <div className="text-lg font-bold text-slate-900">{weibullStats.sigma.toFixed(2)} m/s</div>
+                    </div>
+                  </div>
+                  {/* 히스토그램 + Weibull 곡선 오버레이 */}
+                  <ResponsiveContainer width="100%" height={260}>
+                    <LineChart data={weibullStats.bins} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
+                      <XAxis dataKey="bin" tick={{ fontSize: 9, fill: "#64748b" }} interval={0} angle={-30} textAnchor="end" height={44} />
+                      <YAxis tick={{ fontSize: 11, fill: "#64748b" }} tickFormatter={(v: number) => (v * 100).toFixed(1) + "%"} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }}
+                        formatter={(value: unknown, name: unknown) => {
+                          const v = typeof value === "number" ? value : 0;
+                          return [name === "freq" ? (v * 100).toFixed(2) + "%" : v.toFixed(4), name === "freq" ? "실측 빈도" : "Weibull PDF"];
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: "11px" }} formatter={(v) => v === "freq" ? "실측 빈도" : "Weibull PDF"} />
+                      <Line type="monotone" dataKey="freq" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="pdf" stroke="#f59e0b" strokeWidth={2} dot={false} strokeDasharray="5 3" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <p className="text-[11px] text-slate-400 mt-2">Method of Moments · 데이터 {weibullStats.n}일</p>
+                </>
+              )}
+            </div>
+
+            {/* ── 풍속 전단 분석 ── */}
+            <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
+              <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                <Wind className="w-4 h-4 text-blue-400" />풍속 전단 분석 (Wind Shear · {selectedMonth})
+              </h3>
+              {!windShearStats ? (
+                <div className="text-center py-8 text-slate-500 text-sm">ch1(100m) / ch7(40m) 데이터 부족</div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
+                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3 col-span-1">
+                      <div className="text-xs text-slate-500 mb-1">전단 지수 α</div>
+                      <div className="text-lg font-bold text-slate-900">{windShearStats.alpha.toFixed(4)}</div>
+                      <div className="text-[11px] text-slate-400 mt-1">
+                        {windShearStats.alpha < 0.1 ? "매우 낮음 (불안정)" : windShearStats.alpha < 0.2 ? "낮음 (양호)" : windShearStats.alpha < 0.3 ? "표준 (IEC 1/7≈0.143)" : "높음 (안정)"}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3">
+                      <div className="text-xs text-slate-500 mb-1">100m 평균 풍속</div>
+                      <div className="text-lg font-bold text-slate-900">
+                        {windShearStats.profile.find((p) => p.ch === "ch1")?.speed.toFixed(2) ?? "-"} m/s
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3">
+                      <div className="text-xs text-slate-500 mb-1">40m 평균 풍속</div>
+                      <div className="text-lg font-bold text-slate-900">
+                        {windShearStats.profile.find((p) => p.ch === "ch7")?.speed.toFixed(2) ?? "-"} m/s
+                      </div>
+                    </div>
+                  </div>
+                  {/* 수직 풍속 프로파일 차트 */}
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={windShearStats.profile} layout="vertical" margin={{ top: 4, right: 24, left: 16, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
+                      <XAxis type="number" dataKey="speed" tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" domain={["auto", "auto"]} />
+                      <YAxis type="number" dataKey="height" tick={{ fontSize: 11, fill: "#64748b" }} unit="m" domain={["auto", "auto"]} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }}
+                        formatter={(value: unknown) => { const v = typeof value === "number" ? value : 0; return [`${v.toFixed(2)} m/s`, "평균 풍속"]; }}
+                        labelFormatter={(label) => `높이 ${label}m`}
+                      />
+                      <Line type="monotone" dataKey="speed" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 5, fill: "#3b82f6" }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <p className="text-[11px] text-slate-400 mt-2">Power Law: α = log(V₂/V₁) / log(H₂/H₁) · ch1(100m) ↔ ch7(40m)</p>
+                </>
+              )}
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
