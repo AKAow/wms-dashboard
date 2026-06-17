@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Plus, Trash2, Upload, Download, ChevronDown, ChevronUp, Wind } from "lucide-react";
 import type { PowerCurvePoint } from "@/lib/simulation-types";
 import { STANDARD_TURBINE_SCENARIOS } from "@/lib/simulation-constants";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
 interface DbTurbineCurve {
   id: string;
@@ -42,6 +43,28 @@ const EMPTY_FORM: CurveForm = {
   ],
   notes: "",
 };
+
+function PowerCurveChart({ points, cutIn, cutOut, ratedMw }: { points: PowerCurvePoint[]; cutIn?: number; cutOut?: number; ratedMw?: number }) {
+  const sorted = [...points].sort((a, b) => a.ws - b.ws);
+  const maxKw = ratedMw ? ratedMw * 1000 : Math.max(...sorted.map((p) => p.kw), 1);
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <LineChart data={sorted} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#e2ecfa" />
+        <XAxis dataKey="ws" type="number" domain={["dataMin", "dataMax"]} tickCount={8}
+          tick={{ fontSize: 11, fill: "#64748b" }} label={{ value: "풍속 (m/s)", position: "insideBottomRight", offset: -4, fontSize: 11, fill: "#94a3b8" }} />
+        <YAxis domain={[0, maxKw * 1.05]} tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}MW` : `${v}`}
+          tick={{ fontSize: 11, fill: "#64748b" }} width={52} />
+        <Tooltip formatter={(v: number) => [`${v.toLocaleString()} kW`, "출력"]}
+          labelFormatter={(l) => `${l} m/s`}
+          contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #d6e8ff" }} />
+        {cutIn  && <ReferenceLine x={cutIn}  stroke="#f59e0b" strokeDasharray="4 2" label={{ value: "컷인", fontSize: 10, fill: "#f59e0b" }} />}
+        {cutOut && <ReferenceLine x={cutOut} stroke="#ef4444" strokeDasharray="4 2" label={{ value: "컷아웃", fontSize: 10, fill: "#ef4444" }} />}
+        <Line type="monotone" dataKey="kw" stroke="#2563eb" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
 
 function CurveEditor({ points, onChange }: { points: PowerCurvePoint[]; onChange: (pts: PowerCurvePoint[]) => void }) {
   return (
@@ -142,6 +165,7 @@ export default function TurbinesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedBuiltin, setExpandedBuiltin] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CurveForm | null>(null);
   const [showNew, setShowNew] = useState(false);
@@ -252,16 +276,25 @@ export default function TurbinesPage() {
         <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">내장 기종 (읽기 전용 · 스크리닝용 근사 커브)</h2>
         <div className="space-y-1.5">
           {STANDARD_TURBINE_SCENARIOS.map((s) => (
-            <div key={s.key} className="rounded-lg border border-[#d6e8ff] bg-white/70 px-4 py-2.5 flex items-center gap-3">
-              <Wind className="w-4 h-4 text-blue-400 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-slate-800">{s.name}</div>
-                <div className="text-xs text-slate-500">
-                  {s.ratedMw}MW · IEC {s.iecClass} · 허브 {s.hubHeightM}m · 로터 {s.rotorDiameterM}m · 컷인 {s.cutIn} / 컷아웃 {s.cutOut} m/s
-                  {s.notes ? <span className="ml-1 text-amber-600">· {s.notes}</span> : null}
+            <div key={s.key} className="rounded-xl border border-[#d6e8ff] bg-white/70">
+              <div className="px-4 py-2.5 flex items-center gap-3 cursor-pointer"
+                onClick={() => setExpandedBuiltin(expandedBuiltin === s.key ? null : s.key)}>
+                <Wind className="w-4 h-4 text-blue-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-slate-800">{s.name}</div>
+                  <div className="text-xs text-slate-500">
+                    {s.ratedMw}MW · IEC {s.iecClass} · 허브 {s.hubHeightM}m · 로터 {s.rotorDiameterM}m · 컷인 {s.cutIn} / 컷아웃 {s.cutOut} m/s
+                    {s.notes ? <span className="ml-1 text-amber-600">· {s.notes}</span> : null}
+                  </div>
                 </div>
+                <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">{s.powerCurve.length}pt</span>
+                {expandedBuiltin === s.key ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
               </div>
-              <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">{s.powerCurve.length}pt</span>
+              {expandedBuiltin === s.key && (
+                <div className="border-t border-[#d6e8ff] px-4 py-3">
+                  <PowerCurveChart points={s.powerCurve} cutIn={s.cutIn} cutOut={s.cutOut} ratedMw={s.ratedMw} />
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -317,14 +350,20 @@ export default function TurbinesPage() {
                         </div>
                       </div>
                     ) : (
-                      <table className="text-xs">
-                        <thead><tr><th className="text-left pr-6 pb-1 text-slate-500 font-medium">풍속 (m/s)</th><th className="text-left text-slate-500 font-medium">출력 (kW)</th></tr></thead>
-                        <tbody>
-                          {[...c.curve_data].sort((a, b) => a.ws - b.ws).map((p, i) => (
-                            <tr key={i}><td className="pr-6 py-0.5 text-slate-700">{p.ws}</td><td className="text-slate-700">{p.kw.toLocaleString()}</td></tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <div className="space-y-3">
+                        <PowerCurveChart points={c.curve_data} cutIn={c.cut_in} cutOut={c.cut_out} ratedMw={c.rated_mw} />
+                        <details className="text-xs text-slate-500 cursor-pointer">
+                          <summary className="select-none hover:text-slate-700">원시 데이터 ({c.curve_data.length}포인트)</summary>
+                          <table className="mt-2">
+                            <thead><tr><th className="text-left pr-6 pb-1 font-medium">풍속 (m/s)</th><th className="text-left font-medium">출력 (kW)</th></tr></thead>
+                            <tbody>
+                              {[...c.curve_data].sort((a, b) => a.ws - b.ws).map((p, i) => (
+                                <tr key={i}><td className="pr-6 py-0.5 text-slate-700">{p.ws}</td><td className="text-slate-700">{p.kw.toLocaleString()}</td></tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </details>
+                      </div>
                     )}
                   </div>
                 )}
