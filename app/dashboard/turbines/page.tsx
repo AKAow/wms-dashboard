@@ -352,16 +352,32 @@ export default function TurbinesPage() {
                     ) : (
                       <div className="space-y-3">
                         <PowerCurveChart points={c.curve_data} cutIn={c.cut_in} cutOut={c.cut_out} ratedMw={c.rated_mw} />
-                        <details className="text-xs text-slate-500 cursor-pointer">
-                          <summary className="select-none hover:text-slate-700">원시 데이터 ({c.curve_data.length}포인트)</summary>
-                          <table className="mt-2">
-                            <thead><tr><th className="text-left pr-6 pb-1 font-medium">풍속 (m/s)</th><th className="text-left font-medium">출력 (kW)</th></tr></thead>
-                            <tbody>
-                              {[...c.curve_data].sort((a, b) => a.ws - b.ws).map((p, i) => (
-                                <tr key={i}><td className="pr-6 py-0.5 text-slate-700">{p.ws}</td><td className="text-slate-700">{p.kw.toLocaleString()}</td></tr>
-                              ))}
-                            </tbody>
-                          </table>
+                        <details className="cursor-pointer">
+                          <summary className="text-xs text-slate-500 select-none hover:text-slate-700 mb-2">
+                            원시 데이터 ({c.curve_data.length}포인트)
+                          </summary>
+                          <div className="overflow-x-auto rounded-lg border border-[#d6e8ff]">
+                            <table className="text-xs border-collapse min-w-max">
+                              <thead>
+                                <tr className="bg-slate-50 border-b border-[#d6e8ff]">
+                                  <td className="px-3 py-2 font-semibold text-slate-500 whitespace-nowrap sticky left-0 bg-slate-50 border-r border-[#d6e8ff]">풍속 (m/s)</td>
+                                  {[...c.curve_data].sort((a, b) => a.ws - b.ws).map((p, i) => (
+                                    <td key={i} className="px-3 py-2 text-center font-medium text-slate-600 whitespace-nowrap border-r border-[#d6e8ff] last:border-r-0">{p.ws}</td>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr>
+                                  <td className="px-3 py-2 font-semibold text-slate-500 whitespace-nowrap sticky left-0 bg-white border-r border-[#d6e8ff]">출력 (kW)</td>
+                                  {[...c.curve_data].sort((a, b) => a.ws - b.ws).map((p, i) => (
+                                    <td key={i} className={`px-3 py-2 text-center whitespace-nowrap border-r border-[#d6e8ff] last:border-r-0 ${p.kw === 0 ? "text-slate-300" : p.kw >= c.rated_mw * 1000 * 0.99 ? "text-blue-600 font-semibold bg-blue-50" : "text-slate-700"}`}>
+                                      {p.kw.toLocaleString()}
+                                    </td>
+                                  ))}
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
                         </details>
                       </div>
                     )}
