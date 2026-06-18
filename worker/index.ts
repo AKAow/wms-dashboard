@@ -343,45 +343,54 @@ function walkParts(parts: any[] | undefined, out: any[] = []): any[] {
   return out;
 }
 
-const KST_DAYS = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"] as const;
+const KST_DAYS = ["매일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"] as const;
 type KstDay = (typeof KST_DAYS)[number];
 
-const JS_DAY_TO_KST: KstDay[] = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
+const JS_DAY_TO_KST = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"] as const;
 
 function kstDayToJsDay(day: KstDay): number {
-  if (day === "일요일") return 0;
-  return KST_DAYS.indexOf(day) + 1;
+  if (day === "매일" || day === "일요일") return 0;
+  return ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"].indexOf(day) + 1;
 }
 
 function jsDayToKstDay(jsDay: number): KstDay | null {
-  return JS_DAY_TO_KST[jsDay] ?? null;
+  return (JS_DAY_TO_KST[jsDay] as KstDay) ?? null;
 }
 
 function dayTimeToCron(day: KstDay, hourKst: number, minuteKst: number): string {
-  const kstJsDay = kstDayToJsDay(day);
   const totalMinutes = hourKst * 60 + minuteKst;
   const utcTotal = totalMinutes - 9 * 60;
-  const dayShift = utcTotal < 0 ? -1 : utcTotal >= 24 * 60 ? 1 : 0;
   const normalized = ((utcTotal % (24 * 60)) + 24 * 60) % (24 * 60);
   const utcHour = Math.floor(normalized / 60);
   const utcMinute = normalized % 60;
+  if (day === "매일") return `${utcMinute} ${utcHour} * * *`;
+  const kstJsDay = kstDayToJsDay(day);
+  const dayShift = utcTotal < 0 ? -1 : utcTotal >= 24 * 60 ? 1 : 0;
   const utcDow = (kstJsDay + dayShift + 7) % 7;
   return `${utcMinute} ${utcHour} * * ${utcDow}`;
 }
 
 function cronToDayTimeKst(cron: string): { dayKst: KstDay; hourKst: number; minuteKst: number } | null {
-  const m = cron.trim().match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+([0-7])$/);
-  if (!m) return null;
-
-  const minute = Number(m[1]);
-  const hour = Number(m[2]);
-  const rawDow = Number(m[3]);
+  // 매일: "MM HH * * *"
+  const daily = cron.trim().match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/);
+  if (daily) {
+    const minute = Number(daily[1]);
+    const hour = Number(daily[2]);
+    if (Number.isNaN(minute) || Number.isNaN(hour)) return null;
+    const kstTotal = hour * 60 + minute + 9 * 60;
+    const normalized = kstTotal % (24 * 60);
+    return { dayKst: "매일", hourKst: Math.floor(normalized / 60), minuteKst: normalized % 60 };
+  }
+  // 주 1회: "MM HH * * DOW"
+  const weekly = cron.trim().match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+([0-7])$/);
+  if (!weekly) return null;
+  const minute = Number(weekly[1]);
+  const hour = Number(weekly[2]);
+  const rawDow = Number(weekly[3]);
   if (Number.isNaN(minute) || Number.isNaN(hour) || Number.isNaN(rawDow)) return null;
   if (minute < 0 || minute > 59 || hour < 0 || hour > 23) return null;
-
   const utcDow = rawDow === 7 ? 0 : rawDow;
   if (utcDow < 0 || utcDow > 6) return null;
-
   const kstTotal = hour * 60 + minute + 9 * 60;
   const dayShift = kstTotal >= 24 * 60 ? 1 : 0;
   const normalized = kstTotal % (24 * 60);
@@ -426,7 +435,7 @@ async function setCronConfig(env: Env, dayKst: string, hourKst = 10, minuteKst =
   if (!env.CLOUDFLARE_API_TOKEN || !env.CLOUDFLARE_ACCOUNT_ID) {
     return new Response(JSON.stringify({ ok: false, error: "cloudflare-config-missing" }), { status: 500 });
   }
-  if (!KST_DAYS.includes(dayKst as KstDay)) {
+  if (!KST_DAYS.includes(dayKst as KstDay) && dayKst !== "매일") {
     return new Response(JSON.stringify({ ok: false, error: "invalid-day" }), { status: 400 });
   }
   if (!Number.isInteger(hourKst) || hourKst < 0 || hourKst > 23) {

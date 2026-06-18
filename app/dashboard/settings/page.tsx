@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Settings, Key, Mail, Globe, CheckCircle, Loader2, CalendarDays, Plus, Trash2, AlertCircle } from "lucide-react";
 
 const WORKER_BASE = "https://wms-rld-worker.aka-74b.workers.dev";
-const DAYS = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"] as const;
+const DAYS = ["매일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"] as const;
 const TIMES = ["06:00", "10:00", "14:00", "18:00"] as const;
 
 type GmailAccount = {
@@ -188,13 +188,18 @@ export default function SettingsPage() {
                 <select value={syncDay} onChange={(e) => setSyncDay(e.target.value as (typeof DAYS)[number])} disabled={loadingCron} className="rounded-lg border border-[#c8def8] bg-white/70 px-3 py-1.5 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:opacity-60">
                   {DAYS.map((day) => <option key={day} value={day}>{day}</option>)}
                 </select>
+                {syncDay !== "매일" && (
+                  <span className="text-xs text-slate-400">요일</span>
+                )}
                 <select value={syncTime} onChange={(e) => setSyncTime(e.target.value as (typeof TIMES)[number])} disabled={loadingCron} className="rounded-lg border border-[#c8def8] bg-white/70 px-3 py-1.5 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:opacity-60">
                   {TIMES.map((time) => <option key={time} value={time}>{time}</option>)}
                 </select>
               </div>
             </div>
             <div className="flex justify-between"><span className="text-slate-500">상태</span><span className="text-green-400">활성</span></div>
-            <p className="text-xs text-slate-500 pt-2 border-t border-[#d6e8ff]">현재 설정 기준: 주 1회 {syncDay} {syncTime} KST</p>
+            <p className="text-xs text-slate-500 pt-2 border-t border-[#d6e8ff]">
+              현재 설정: {syncDay === "매일" ? `매일 ${syncTime} KST` : `주 1회 ${syncDay} ${syncTime} KST`}
+            </p>
           </div>
         </div>
 

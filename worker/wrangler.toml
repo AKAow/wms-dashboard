@@ -4,7 +4,7 @@ compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
 [triggers]
-crons = ["0 1 * * 5"] # 금요일 10:00 KST
+crons = ["0 1 * * *"] # 매일 10:00 KST
 
 [vars]
 SUPABASE_URL = "https://gxngbvahywpaaavkkrfx.supabase.co"
