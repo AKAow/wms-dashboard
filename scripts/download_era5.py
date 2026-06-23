@@ -113,25 +113,30 @@ for site in valid:
                 continue
 
             print(f"  요청 중: {year}-{month:02d}...")
-            c.retrieve(
-                "reanalysis-era5-single-levels",
-                {
-                    "product_type": "reanalysis",
-                    "variable": [
-                        "100m_u_component_of_wind",
-                        "100m_v_component_of_wind",
-                        "surface_pressure",
-                        "2m_temperature",
-                    ],
-                    "year": year,
-                    "month": f"{month:02d}",
-                    "day":   [f"{d:02d}" for d in range(1, 32)],
-                    "time":  [f"{h:02d}:00" for h in range(24)],
-                    "area":  [lat + MARGIN, lon - MARGIN, lat - MARGIN, lon + MARGIN],
-                    "format": "netcdf",
-                },
-                out_path,
-            )
-            print(f"  저장: {out_path}")
+            try:
+                c.retrieve(
+                    "reanalysis-era5-single-levels",
+                    {
+                        "product_type": "reanalysis",
+                        "variable": [
+                            "100m_u_component_of_wind",
+                            "100m_v_component_of_wind",
+                            "surface_pressure",
+                            "2m_temperature",
+                        ],
+                        "year": year,
+                        "month": f"{month:02d}",
+                        "day":   [f"{d:02d}" for d in range(1, 32)],
+                        "time":  [f"{h:02d}:00" for h in range(24)],
+                        "area":  [lat + MARGIN, lon - MARGIN, lat - MARGIN, lon + MARGIN],
+                        "format": "netcdf",
+                    },
+                    out_path,
+                )
+                print(f"  저장: {out_path}")
+            except Exception as e:
+                # 미래 월(아직 데이터 없음) 등 개별 요청 실패 시 건너뛰고 계속
+                print(f"  실패 (건너뜀) {year}-{month:02d}: {e}")
+                continue
 
 print("\n전체 완료.")
