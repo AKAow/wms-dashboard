@@ -887,7 +887,7 @@ export default function SiteDetail({ site }: { site: Site }) {
   const activeDirVar = overviewKpiPeriod === "all" ? allWindDirVariability : overviewKpiPeriod === "day" ? dayWindDirVariability : monthWindDirVariability;
 
   const sensorWindRows = useMemo(() => {
-    const speedChannels = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"] as const;
+    const speedChannels = WIND_SPEED_NORTH_CHANNELS;
     if (overviewKpiPeriod === "day") {
       return speedChannels.map((ch) => {
         const values = dailyExcelData.map((m) => m[ch]).filter((v): v is number => typeof v === "number");
@@ -962,10 +962,11 @@ export default function SiteDetail({ site }: { site: Site }) {
     });
   }, [monthRows, selectedScenario, tempByDate, pressureByDate]);
 
-  // Overview WindRose — 선택 높이
+  // Overview WindRose — 선택 높이 (풍향 채널에 대응하는 같은 높이의 풍속 채널 사용)
   const overviewWindRoseData = useMemo(() => {
-    const speedCh = "ch1";
+    const PAIRS: Record<"ch13"|"ch14"|"ch15"|"ch16", "ch1"|"ch3"|"ch5"|"ch7"> = { ch13: "ch1", ch14: "ch3", ch15: "ch5", ch16: "ch7" };
     const dirCh = windRoseDirCh;
+    const speedCh = PAIRS[dirCh];
     if (overviewKpiPeriod === "day") {
       return dailyExcelData.map((m) => ({ dir: m[dirCh], speed: m[speedCh] }));
     }
@@ -1028,7 +1029,21 @@ export default function SiteDetail({ site }: { site: Site }) {
 
   const estimateRowsForPeriod = useMemo(() => {
     if (overviewKpiPeriod === "day") {
-      return estimateDailyRows.slice(-1);
+      const row = dailyStats.find((r) => r.channel === "ch1" && r.date === selectedDate && typeof r.avg_value === "number");
+      if (!row) return [];
+      const v = row.avg_value as number;
+      const dc = row.data_count ?? 0;
+      const uncertaintyPct = dc >= 100 ? 8 : dc >= 50 ? 12 : 16;
+      const p50raw = estimateDailyEnergyMwh({
+        windSpeed: v,
+        tempC: tempByDate.get(row.date),
+        pressureHpa: pressureByDate.get(row.date),
+        scenario: selectedScenario,
+        assumptions: DEFAULT_SIMULATION_ASSUMPTIONS,
+      });
+      const { p50, p75, p90 } = estimatePValuesFromP50(p50raw, uncertaintyPct);
+      const quality = dc >= 100 ? "정상" : dc >= 50 ? "주의" : "낮음";
+      return [{ date: row.date.slice(5), wind: v, p50, p75, p90, quality }];
     }
 
     if (overviewKpiPeriod === "month") {
@@ -1066,7 +1081,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       p90: r.p90Sum,
       quality: r.qualityScore >= r.count * 1.5 ? "정상" : r.qualityScore >= r.count ? "주의" : "낮음",
     }));
-  }, [estimateDailyRows, overviewKpiPeriod, dailyStats, selectedScenario, tempByDate, pressureByDate]);
+  }, [estimateDailyRows, overviewKpiPeriod, dailyStats, selectedDate, selectedScenario, tempByDate, pressureByDate]);
 
   const effectiveSimDates = useMemo(() => {
     if (simPreset === "custom") return { start: simStartDate, end: simEndDate };
