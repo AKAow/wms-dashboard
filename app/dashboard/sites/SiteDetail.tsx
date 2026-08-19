@@ -18,8 +18,6 @@ const EXCEL_DISPLAY_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7",
 const EXCEL_WIND_SPEED_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7", "ch8"] as const;
 // North 센서만 (Shadow 센서 ch4/ch6/ch8은 타워 후류 영향으로 최대 돌풍 산출에서 제외)
 const WIND_SPEED_NORTH_CHANNELS = ["ch1", "ch2", "ch3", "ch5", "ch7"] as const;
-const EXCEL_WIND_DIR_CHANNELS = ["ch13", "ch14", "ch15", "ch16"] as const;
-const EXCEL_ATMO_CHANNELS = ["ch17", "ch21", "ch22"] as const;
 const RIGHT_SUMMARY_CLASS = ["right-[216px]", "right-[144px]", "right-[72px]", "right-0"] as const;
 const RIGHT_SUMMARY_BG_CLASS = "bg-[#f8fbff] shadow-[-1px_0_0_#d6e8ff_inset]";
 
@@ -1755,8 +1753,6 @@ export default function SiteDetail({ site }: { site: Site }) {
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  onKeyDown={(e) => e.preventDefault()}
-                  onFocus={undefined}
                   className="rounded-xl border border-[#c8def8] bg-white/70 px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
                 />
                 <button
@@ -1817,15 +1813,17 @@ export default function SiteDetail({ site }: { site: Site }) {
                 <LineChart data={dailyExcelData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
                   <XAxis dataKey="time" tick={{ fontSize: 10, fill: "#64748b" }} interval={11} />
-                  <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "#64748b" }} unit="°" domain={["auto", "auto"]} />
-                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "#a855f7" }} unit=" hPa" domain={["auto", "auto"]} />
+                  <YAxis yAxisId="temp" tick={{ fontSize: 11, fill: "#64748b" }} unit="°C" domain={["auto", "auto"]} />
+                  <YAxis yAxisId="pressure" orientation="right" tick={{ fontSize: 11, fill: "#a855f7" }} unit=" hPa" domain={["auto", "auto"]} />
+                  <YAxis yAxisId="humidity" hide domain={[0, 100]} />
                   <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
                   <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  <Line yAxisId="right" type="monotone" dataKey="ch17" name={CHANNEL_LABELS["ch17"]} stroke={CHART_COLORS["ch17"]} dot={false} strokeWidth={1.8} />
-                  <Line yAxisId="left" type="monotone" dataKey="ch21" name={CHANNEL_LABELS["ch21"]} stroke={CHART_COLORS["ch21"]} dot={false} strokeWidth={1.8} />
-                  <Line yAxisId="left" type="monotone" dataKey="ch22" name={CHANNEL_LABELS["ch22"]} stroke={CHART_COLORS["ch22"]} dot={false} strokeWidth={1.8} />
+                  <Line yAxisId="pressure" type="monotone" dataKey="ch17" name={CHANNEL_LABELS["ch17"]} stroke={CHART_COLORS["ch17"]} dot={false} strokeWidth={1.8} />
+                  <Line yAxisId="humidity" type="monotone" dataKey="ch21" name={CHANNEL_LABELS["ch21"]} stroke={CHART_COLORS["ch21"]} dot={false} strokeWidth={1.8} />
+                  <Line yAxisId="temp" type="monotone" dataKey="ch22" name={CHANNEL_LABELS["ch22"]} stroke={CHART_COLORS["ch22"]} dot={false} strokeWidth={1.8} />
                 </LineChart>
               </ResponsiveContainer>
+              <p className="text-[11px] text-slate-400 mt-1">기온(좌축 °C) · 기압(우축 hPa) · 상대습도(%, 0~100 범위로 별도 스케일 — 툴팁에서 정확한 값 확인)</p>
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
@@ -1874,8 +1872,6 @@ export default function SiteDetail({ site }: { site: Site }) {
                   type="month"
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
-                  onKeyDown={(e) => e.preventDefault()}
-                  onFocus={undefined}
                   className="rounded-xl border border-[#c8def8] bg-white/70 px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
                 />
                 <button
