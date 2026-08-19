@@ -789,6 +789,24 @@ export default function SiteDetail({ site }: { site: Site }) {
     });
   }, [selectedMonthStats]);
 
+  // 우세풍향 — 16방위 중 최다 빈도 방향과 그 비중(%)
+  const monthlyDominantDirection = useMemo(() => {
+    const n = 16;
+    const sectorDeg = 360 / n;
+    const counts = Array(n).fill(0);
+    let total = 0;
+    for (const { dir } of monthlyWindRoseAllData) {
+      if (dir == null) continue;
+      total++;
+      const idx = Math.round(((dir % 360) + 360) / sectorDeg) % n;
+      counts[idx]++;
+    }
+    if (total === 0) return null;
+    let maxIdx = 0;
+    for (let i = 1; i < n; i++) if (counts[i] > counts[maxIdx]) maxIdx = i;
+    return { label: WIND_ROSE_DIRS[maxIdx], pct: Math.round((counts[maxIdx] / total) * 100) };
+  }, [monthlyWindRoseAllData]);
+
   const monthWindDirVariability = useMemo(() => {
     const angles = monthRows
       .filter((r) => ["ch13", "ch14", "ch15", "ch16"].includes(r.channel) && typeof r.avg_value === "number")
@@ -1976,7 +1994,17 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
               <h3 className="text-sm font-semibold text-slate-900 mb-4 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-400" />엑셀형 월간 채널 비교 그래프 (평균값)</h3>
               <ResponsiveContainer width="100%" height={320}>
-                <LineChart data={excelMonthlyChartData}>
+                <LineChart
+                  data={excelMonthlyChartData}
+                  className="cursor-pointer"
+                  onClick={(state) => {
+                    const label = state?.activeLabel;
+                    if (typeof label === "string" && label.length === 5) {
+                      setSelectedDate(`${selectedMonth}-${label.slice(3)}`);
+                      setTab("daily");
+                    }
+                  }}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} interval="preserveStartEnd" minTickGap={20} />
                   <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
@@ -1992,22 +2020,29 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <Line type="monotone" dataKey="ch8" name="40m 풍속 (S)" stroke={CHART_COLORS.ch8} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch8")} />
                 </LineChart>
               </ResponsiveContainer>
-              <p className="text-[11px] text-slate-400 mt-1">(N) = North 센서 · (S) = Shadow 센서(타워 후류측). 기본적으로 (S)는 범례에서 숨김 처리 — 클릭 시 표시</p>
+              <p className="text-[11px] text-slate-400 mt-1">(N) = North 센서 · (S) = Shadow 센서(타워 후류측). 기본적으로 (S)는 범례에서 숨김 처리 — 클릭 시 표시 · 그래프의 특정 날짜를 클릭하면 해당 날짜의 일별 데이터로 이동합니다</p>
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
                 <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Navigation className="w-4 h-4 text-blue-400" />Wind Direction Rose</h3>
-                <select
-                  value={monthlyWindRoseDirCh}
-                  onChange={(e) => setMonthlyWindRoseDirCh(e.target.value as "ch13" | "ch14" | "ch15" | "ch16")}
-                  className="rounded-lg border border-[#d6e8ff] bg-white px-2 py-1 text-xs text-slate-700"
-                >
-                  <option value="ch13">97m (ch13)</option>
-                  <option value="ch14">77m (ch14)</option>
-                  <option value="ch15">57m (ch15)</option>
-                  <option value="ch16">37m (ch16)</option>
-                </select>
+                <div className="flex items-center gap-2">
+                  {monthlyDominantDirection && (
+                    <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                      우세풍향 {monthlyDominantDirection.label} ({monthlyDominantDirection.pct}%)
+                    </span>
+                  )}
+                  <select
+                    value={monthlyWindRoseDirCh}
+                    onChange={(e) => setMonthlyWindRoseDirCh(e.target.value as "ch13" | "ch14" | "ch15" | "ch16")}
+                    className="rounded-lg border border-[#d6e8ff] bg-white px-2 py-1 text-xs text-slate-700"
+                  >
+                    <option value="ch13">97m (ch13)</option>
+                    <option value="ch14">77m (ch14)</option>
+                    <option value="ch15">57m (ch15)</option>
+                    <option value="ch16">37m (ch16)</option>
+                  </select>
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <WindRose data={monthlyWindRoseAllData} label="전 높이 종합" />
@@ -2027,22 +2062,22 @@ export default function SiteDetail({ site }: { site: Site }) {
                 <div className="text-center py-8 text-slate-500 text-sm">데이터 부족 (최소 3일 필요)</div>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3">
-                      <div className="text-xs text-slate-500 mb-1">형상 계수 k</div>
-                      <div className="text-lg font-bold text-slate-900">{weibullStats.k.toFixed(3)}</div>
+                  <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-5">
+                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-2 sm:px-4 py-2 sm:py-3 min-w-0">
+                      <div className="text-[10px] sm:text-xs text-slate-500 mb-1 truncate">형상 계수 k</div>
+                      <div className="text-sm sm:text-lg font-bold text-slate-900 truncate">{weibullStats.k.toFixed(3)}</div>
                     </div>
-                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3">
-                      <div className="text-xs text-slate-500 mb-1">척도 계수 A (m/s)</div>
-                      <div className="text-lg font-bold text-slate-900">{weibullStats.A.toFixed(3)}</div>
+                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-2 sm:px-4 py-2 sm:py-3 min-w-0">
+                      <div className="text-[10px] sm:text-xs text-slate-500 mb-1 truncate">척도 계수 A (m/s)</div>
+                      <div className="text-sm sm:text-lg font-bold text-slate-900 truncate">{weibullStats.A.toFixed(3)}</div>
                     </div>
-                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3">
-                      <div className="text-xs text-slate-500 mb-1">평균 풍속 μ</div>
-                      <div className="text-lg font-bold text-slate-900">{weibullStats.mu.toFixed(2)} m/s</div>
+                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-2 sm:px-4 py-2 sm:py-3 min-w-0">
+                      <div className="text-[10px] sm:text-xs text-slate-500 mb-1 truncate">평균 풍속 μ</div>
+                      <div className="text-sm sm:text-lg font-bold text-slate-900 truncate">{weibullStats.mu.toFixed(2)} m/s</div>
                     </div>
-                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3">
-                      <div className="text-xs text-slate-500 mb-1">표준편차 σ</div>
-                      <div className="text-lg font-bold text-slate-900">{weibullStats.sigma.toFixed(2)} m/s</div>
+                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-2 sm:px-4 py-2 sm:py-3 min-w-0">
+                      <div className="text-[10px] sm:text-xs text-slate-500 mb-1 truncate">표준편차 σ</div>
+                      <div className="text-sm sm:text-lg font-bold text-slate-900 truncate">{weibullStats.sigma.toFixed(2)} m/s</div>
                     </div>
                   </div>
                   {/* 히스토그램 + Weibull 곡선 오버레이 */}
@@ -2077,23 +2112,26 @@ export default function SiteDetail({ site }: { site: Site }) {
                 <div className="text-center py-8 text-slate-500 text-sm">최소 2개 높이 이상의 풍속 데이터가 필요합니다</div>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
-                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3 col-span-1">
-                      <div className="text-xs text-slate-500 mb-1">전단 지수 α</div>
-                      <div className="text-lg font-bold text-slate-900">{windShearStats.alpha.toFixed(4)}</div>
-                      <div className="text-[11px] text-slate-400 mt-1">
-                        {windShearStats.alpha < 0.1 ? "매우 낮음 (불안정)" : windShearStats.alpha < 0.2 ? "낮음 (양호)" : windShearStats.alpha < 0.3 ? "표준 (IEC 1/7≈0.143)" : "높음 (안정)"}
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-5">
+                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-2 sm:px-4 py-2 sm:py-3 min-w-0">
+                      <div className="text-[10px] sm:text-xs text-slate-500 mb-1 truncate">전단 지수 α</div>
+                      <div className="text-sm sm:text-lg font-bold text-slate-900 truncate">{windShearStats.alpha.toFixed(4)}</div>
+                      <div
+                        className="text-[9px] sm:text-[11px] text-slate-400 mt-1 truncate"
+                        title={windShearStats.alpha < 0.1 ? "매우 낮음 (불안정)" : windShearStats.alpha < 0.2 ? "낮음 (양호)" : windShearStats.alpha < 0.3 ? "표준 (IEC 1/7≈0.143)" : "높음 (안정)"}
+                      >
+                        {windShearStats.alpha < 0.1 ? "매우 낮음 (불안정)" : windShearStats.alpha < 0.2 ? "낮음 (양호)" : windShearStats.alpha < 0.3 ? "표준 (IEC≈0.143)" : "높음 (안정)"}
                       </div>
                     </div>
-                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3">
-                      <div className="text-xs text-slate-500 mb-1">최고층 평균 풍속 ({windShearStats.profile[0]?.height ?? "-"}m)</div>
-                      <div className="text-lg font-bold text-slate-900">
+                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-2 sm:px-4 py-2 sm:py-3 min-w-0">
+                      <div className="text-[10px] sm:text-xs text-slate-500 mb-1 truncate">최고층 ({windShearStats.profile[0]?.height ?? "-"}m)</div>
+                      <div className="text-sm sm:text-lg font-bold text-slate-900 truncate">
                         {windShearStats.profile[0]?.speed.toFixed(2) ?? "-"} m/s
                       </div>
                     </div>
-                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3">
-                      <div className="text-xs text-slate-500 mb-1">최저층 평균 풍속 ({windShearStats.profile[windShearStats.profile.length - 1]?.height ?? "-"}m)</div>
-                      <div className="text-lg font-bold text-slate-900">
+                    <div className="rounded-lg border border-[#d6e8ff] bg-white px-2 sm:px-4 py-2 sm:py-3 min-w-0">
+                      <div className="text-[10px] sm:text-xs text-slate-500 mb-1 truncate">최저층 ({windShearStats.profile[windShearStats.profile.length - 1]?.height ?? "-"}m)</div>
+                      <div className="text-sm sm:text-lg font-bold text-slate-900 truncate">
                         {windShearStats.profile[windShearStats.profile.length - 1]?.speed.toFixed(2) ?? "-"} m/s
                       </div>
                     </div>
