@@ -1949,34 +1949,25 @@ export default function SiteDetail({ site }: { site: Site }) {
 
       {tab === "monthly" && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <label className="text-sm text-slate-500">월</label>
-              <div className="flex items-center gap-2">
-                <input
-                  ref={monthInputRef}
-                  type="month"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="rounded-xl border border-[#c8def8] bg-white/70 px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => monthInputRef.current?.showPicker?.()}
-                  className="rounded-lg border border-[#c8def8] bg-white/70 p-2 text-slate-700 hover:text-slate-900"
-                  title="월 선택"
-                >
-                  <CalendarDays className="w-4 h-4" />
-                </button>
-              </div>
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-slate-500">월</label>
+            <div className="flex items-center gap-2">
+              <input
+                ref={monthInputRef}
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="rounded-xl border border-[#c8def8] bg-white/70 px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => monthInputRef.current?.showPicker?.()}
+                className="rounded-lg border border-[#c8def8] bg-white/70 p-2 text-slate-700 hover:text-slate-900"
+                title="월 선택"
+              >
+                <CalendarDays className="w-4 h-4" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={openReportMetaModal}
-              className="rounded-xl border border-blue-500/40 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-500/20"
-            >
-              고객사 엑셀 다운로드
-            </button>
           </div>
 
           {loading ? <div className="text-center py-12 text-slate-500 text-sm">로딩 중...</div>
