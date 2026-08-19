@@ -601,11 +601,39 @@ export default function SiteDetail({ site }: { site: Site }) {
       const res = await fetch(templatePath);
       const ab = await res.arrayBuffer();
       const wb = XLSX.read(ab, { type: "array" });
-      const sheetName = wb.SheetNames[0] || "Monthly";
-      const ws = wb.Sheets[sheetName] ?? XLSX.utils.aoa_to_sheet([]);
 
-      XLSX.utils.sheet_add_aoa(ws, [header, ...rows], { origin: "A1" });
-      wb.Sheets[sheetName] = ws;
+      // 채널별 데이터 테이블: "202603 Monthly" 시트의 헤더(Row8)/12V Battery(Row9) 밑,
+      // 채널 15행(Row10~24)에만 정확히 기록한다. (기존엔 엉뚱하게 첫 시트인 "Index"의
+      // A1을 덮어써서 표지 페이지가 깨지고 실제 데이터 테이블은 갱신되지 않는 버그였음)
+      const monthlyWs = wb.Sheets["202603 Monthly"];
+      if (monthlyWs) {
+        XLSX.utils.sheet_add_aoa(monthlyWs, rows, { origin: "A10" });
+      }
+
+      // 표지(Index) 시트: 리포트 제목과 기간을 선택한 월로 갱신
+      const [y, m] = selectedMonth.split("-");
+      const daysInMonth = new Date(Number(y), Number(m), 0).getDate();
+      const indexWs = wb.Sheets["Index"];
+      if (indexWs) {
+        XLSX.utils.sheet_add_aoa(indexWs, [[`MET MAST MONTHLY REPORT (${y}.${m})`]], { origin: "A9" });
+        XLSX.utils.sheet_add_aoa(indexWs, [[`${selectedMonth}-01 ~ ${selectedMonth}-${String(daysInMonth).padStart(2, "0")}`]], { origin: "E13" });
+      }
+
+      // Overview 시트: 사이트명/좌표/고도를 현재 사이트 정보로 갱신
+      const overviewWs = wb.Sheets["Overview"];
+      if (overviewWs) {
+        XLSX.utils.sheet_add_aoa(overviewWs, [[site.name]], { origin: "A8" });
+        if (typeof site.latitude === "number") {
+          XLSX.utils.sheet_add_aoa(overviewWs, [[`${site.latitude.toFixed(5)}˚ N`]], { origin: "F8" });
+        }
+        if (typeof site.longitude === "number") {
+          XLSX.utils.sheet_add_aoa(overviewWs, [[`${site.longitude.toFixed(6)}˚ E`]], { origin: "H8" });
+        }
+        if (typeof site.elevation === "number") {
+          XLSX.utils.sheet_add_aoa(overviewWs, [[`${Math.round(site.elevation)} m`]], { origin: "J8" });
+        }
+      }
+
       XLSX.writeFile(wb, `${site.site_number}_${selectedMonth}_Monthly_Report.xlsx`);
       return;
     } catch {
@@ -614,7 +642,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       XLSX.utils.book_append_sheet(wb, ws, "Monthly");
       XLSX.writeFile(wb, `${site.site_number}_${selectedMonth}_Monthly_Report.xlsx`);
     }
-  }, [excelMonthlyTable, selectedMonth, site.site_number]);
+  }, [excelMonthlyTable, selectedMonth, site.site_number, site.name, site.latitude, site.longitude, site.elevation]);
 
   const monthRows = useMemo(
     () => dailyStats.filter((row) => row.date.startsWith(selectedMonth)),
