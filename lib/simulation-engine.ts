@@ -58,9 +58,12 @@ export function estimateDailyEnergyMwh(input: {
   return grossMwh * (1 - clamp(totalLossPct, 0, 60) / 100);
 }
 
+// 표준정규분포 75%/90% 분위수(z=0.6745, 1.2816)를 사용. SiteDetail.tsx의
+// uncertaintyBreakdown과 동일한 계수로 맞춰, 같은 화면 안에서 두 가지 다른
+// P75/P90 산출 공식이 쓰이지 않도록 통일함.
 export function estimatePValuesFromP50(p50Mwh: number, uncertaintyPct = 10): { p50: number; p75: number; p90: number } {
   const u = clamp(uncertaintyPct, 3, 25) / 100;
-  const p75 = p50Mwh * (1 - 0.6 * u);
-  const p90 = p50Mwh * (1 - 1.2 * u);
+  const p75 = p50Mwh * (1 - 0.6745 * u);
+  const p90 = p50Mwh * (1 - 1.2816 * u);
   return { p50: p50Mwh, p75: Math.max(0, p75), p90: Math.max(0, p90) };
 }

@@ -1341,7 +1341,10 @@ export default function SiteDetail({ site }: { site: Site }) {
       for (const r of simulationDailyRows) {
         const dd = Number(r.date.slice(-2));
         const mm = Number(r.date.slice(5, 7));
-        const key = `${mm}월 ${Math.ceil(dd / 7)}주`;
+        const yy = r.date.slice(2, 4);
+        // 연도를 라벨에 포함하지 않으면 12개월을 넘는 커스텀 기간에서
+        // 서로 다른 해의 같은 달/주가 하나로 합산되는 버그가 있었음.
+        const key = `${yy}.${mm}월 ${Math.ceil(dd / 7)}주`;
         const prev = weekMap.get(key) ?? { label: key, windSum: 0, p50Sum: 0, p75Sum: 0, p90Sum: 0, count: 0 };
         prev.windSum += r.wind;
         prev.p50Sum += r.p50;
@@ -1394,14 +1397,30 @@ export default function SiteDetail({ site }: { site: Site }) {
     return { totalP50, totalP75, totalP90, avgWind, avgP50, avgP75, avgP90, loss: AGE_LOSS_MAP[turbineAgeBand] };
   }, [simulationDailyRows, simulationRows, turbineAgeBand]);
 
+  // 시뮬레이션 적용기간(effectiveSimDates) 기준 데이터 커버리지.
+  // monthCoverage(Overview/월별 탭에서 선택된 단일 달)를 그대로 쓰면 시뮬레이션
+  // 기간(3M/6M/12M/custom)과 완전히 무관한 값으로 신뢰도가 매겨지는 문제가 있었음.
+  const simCoverage = useMemo(() => {
+    const start = new Date(`${effectiveSimDates.start}T00:00:00`);
+    const end = new Date(`${effectiveSimDates.end}T23:59:59`);
+    const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+    return Math.min(100, Math.round((simulationDailyRows.length / totalDays) * 100));
+  }, [effectiveSimDates, simulationDailyRows]);
+
   const metMastQuality = useMemo(() => {
-    const ch1Rows = dailyStats.filter((r) => r.channel === "ch1" && typeof r.avg_value === "number");
+    const start = new Date(`${effectiveSimDates.start}T00:00:00`);
+    const end = new Date(`${effectiveSimDates.end}T23:59:59`);
+    const ch1Rows = dailyStats.filter((r) => {
+      if (r.channel !== "ch1" || typeof r.avg_value !== "number") return false;
+      const x = new Date(`${r.date}T00:00:00`);
+      return x >= start && x <= end;
+    });
     const n = ch1Rows.length;
     if (!n) return { grade: "C" as const, coverage: 0, highQualityPct: 0, avgPoints: 0, reason: "관측 데이터 부족" };
     const highQuality = ch1Rows.filter((r) => (r.data_count ?? 0) >= 100).length;
     const avgPoints = ch1Rows.reduce((a, b) => a + (b.data_count ?? 0), 0) / n;
     const highQualityPct = Math.round((highQuality / n) * 100);
-    const coverage = monthCoverage;
+    const coverage = simCoverage;
     const grade = coverage >= MET_MAST_GRADE_RULES.A.minCoveragePct && highQualityPct >= MET_MAST_GRADE_RULES.A.minHighQualityPct
       ? "A"
       : coverage >= MET_MAST_GRADE_RULES.B.minCoveragePct && highQualityPct >= MET_MAST_GRADE_RULES.B.minHighQualityPct
@@ -1409,7 +1428,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       : "C";
     const reason = grade === "A" ? "커버리지/데이터수 양호" : grade === "B" ? "보완 관측 권장" : "보완 관측 필요";
     return { grade, coverage, highQualityPct, avgPoints, reason };
-  }, [dailyStats, monthCoverage]);
+  }, [dailyStats, effectiveSimDates, simCoverage]);
 
   const uncertaintyBreakdown = useMemo(() => {
     const measurementPct = metMastQuality.grade === "A" ? 6 : metMastQuality.grade === "B" ? 9 : 12;
@@ -1432,7 +1451,7 @@ export default function SiteDetail({ site }: { site: Site }) {
   }, [turbineAgeBand]);
 
   const simulationAssessment = useMemo(() => {
-    const coverage = monthCoverage;
+    const coverage = simCoverage;
     const wind = simulationSummary.avgWind;
     if (coverage >= 80 && wind >= 6.5) {
       return { grade: "타당", tone: "text-emerald-700 bg-emerald-50 border-emerald-200", reason: "풍황/커버리지 기준 충족" };
@@ -1441,11 +1460,11 @@ export default function SiteDetail({ site }: { site: Site }) {
       return { grade: "조건부 타당", tone: "text-amber-700 bg-amber-50 border-amber-200", reason: "추가 관측 또는 가정 점검 필요" };
     }
     return { grade: "보류", tone: "text-rose-700 bg-rose-50 border-rose-200", reason: "데이터 품질 또는 풍황 기준 미달" };
-  }, [monthCoverage, simulationSummary.avgWind]);
+  }, [simCoverage, simulationSummary.avgWind]);
 
   const simulationAdvice = useMemo(() => {
     const p90Ratio = simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0;
-    const coverage = monthCoverage;
+    const coverage = simCoverage;
     const wind = simulationSummary.avgWind;
     const lossPct = Math.round(simulationSummary.loss * 100);
 
@@ -1475,12 +1494,12 @@ export default function SiteDetail({ site }: { site: Site }) {
       range,
       inRange,
     };
-  }, [simulationSummary, monthCoverage, selectedScenario]);
+  }, [simulationSummary, simCoverage, selectedScenario]);
 
   const simulationConclusion = useMemo(() => {
     const p90ratio = simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0;
-    return `현재 평가는 ${simulationAssessment.grade}이며, 데이터 커버리지 ${monthCoverage}%, P90/P50 ${toFixedOrDash(p90ratio, 2)} 기준으로 ${simulationAdvice.summary}`;
-  }, [simulationAssessment.grade, monthCoverage, simulationSummary.totalP50, simulationSummary.totalP90, simulationAdvice.summary]);
+    return `현재 평가는 ${simulationAssessment.grade}이며, 데이터 커버리지 ${simCoverage}%, P90/P50 ${toFixedOrDash(p90ratio, 2)} 기준으로 ${simulationAdvice.summary}`;
+  }, [simulationAssessment.grade, simCoverage, simulationSummary.totalP50, simulationSummary.totalP90, simulationAdvice.summary]);
 
   // ─── AEP 연간 발전량 추정 (전체 ch1 데이터 기반 Weibull 적분) ───
   const aepEstimate = useMemo(() => {
@@ -2229,7 +2248,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                 <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2"><div className="text-slate-500 tracking-wide">신뢰도 등급</div><div className="font-semibold text-slate-900 mt-0.5">{metMastQuality.grade}</div></div>
                 <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2"><div className="text-slate-500 tracking-wide">누적 P50</div><div className="font-semibold text-slate-900 mt-0.5">{toFixedOrDash(simulationSummary.totalP50, 1)} MWh</div></div>
                 <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2"><div className="text-slate-500 tracking-wide">P90/P50</div><div className="font-semibold text-slate-900 mt-0.5">{toFixedOrDash(simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0, 2)}</div></div>
-                <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2"><div className="text-slate-500 tracking-wide">월 커버리지</div><div className="font-semibold text-slate-900 mt-0.5">{monthCoverage}%</div></div>
+                <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2"><div className="text-slate-500 tracking-wide">기간 커버리지</div><div className="font-semibold text-slate-900 mt-0.5">{simCoverage}%</div></div>
               </div>
             </div>
 
@@ -2307,7 +2326,12 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="flex items-center gap-2 mb-3">
               <Wind className="w-4 h-4 text-emerald-600" />
               <span className="text-sm font-semibold text-slate-900">AEP 연간 발전량 추정</span>
-              <span className="text-xs text-slate-400">(전체 기간 ch1 · Weibull 적분)</span>
+              <span
+                className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5"
+                title="이 카드는 위의 '적용기간(3M/6M/12M/커스텀)' 선택과 무관하게 항상 사이트 개설 이후 전체 ch1 데이터로 계산됩니다."
+              >
+                ⚠ 항상 전체 기간 기준 (위 적용기간 선택과 무관)
+              </span>
             </div>
             {!aepEstimate ? (
               <p className="text-xs text-slate-500">ch1 일간 평균 데이터 10일 이상 필요합니다.</p>
@@ -2345,7 +2369,12 @@ export default function SiteDetail({ site }: { site: Site }) {
           <details className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-700">
             <summary className="cursor-pointer font-semibold text-slate-900">근거 상세 보기</summary>
             <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">MCP-lite: {toFixedOrDash(mcpLiteSummary.factor, 3)} ({mcpLiteSummary.confidence}) · 최근 {toFixedOrDash(mcpLiteSummary.shortAvg, 2)} / 장기 {toFixedOrDash(mcpLiteSummary.longAvg, 2)} m/s</div>
+              <div
+                className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5"
+                title="외부 장기 기준국(재분석 데이터 등)과의 상관보정이 아니라, 이 사이트 자체의 최근 365일 평균 대비 현재 적용기간 평균의 비율입니다. 사이트 운영 기간이 1년 미만이면 두 기간이 거의 겹쳐 보정 의미가 작습니다."
+              >
+                MCP-lite(사이트 내부 보정): {toFixedOrDash(mcpLiteSummary.factor, 3)} ({mcpLiteSummary.confidence}) · 적용기간 {toFixedOrDash(mcpLiteSummary.shortAvg, 2)} / 최근 365일 {toFixedOrDash(mcpLiteSummary.longAvg, 2)} m/s
+              </div>
               <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">불확실성(계측/모델/MCP): ±{toFixedOrDash(uncertaintyBreakdown.measurementPct, 1)} / ±{toFixedOrDash(uncertaintyBreakdown.modelPct, 1)} / ±{toFixedOrDash(uncertaintyBreakdown.mcpPct, 1)}%</div>
               <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">총합 불확실성: ±{toFixedOrDash(uncertaintyBreakdown.totalPct, 1)}% · P75/P50 {toFixedOrDash(uncertaintyBreakdown.p75p50, 2)} · P90/P50 {toFixedOrDash(uncertaintyBreakdown.p90p50, 2)}</div>
               <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">메타: {simulationMeta.version} · {simulationMeta.generatedAt} · 총손실률 {simulationMeta.totalLossPct}%</div>
