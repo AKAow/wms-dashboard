@@ -669,15 +669,47 @@ const worker = {
       const cfBase = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${scriptName}/secrets`;
       const cfHeaders = { "Authorization": `Bearer ${apiToken}`, "Content-Type": "application/json" };
 
-      const body = (await request.json().catch(() => ({}))) as { action?: string; slot?: string; email?: string; refreshToken?: string; clientId?: string; clientSecret?: string };
+      const body = (await request.json().catch(() => ({}))) as { action?: string; slot?: string; email?: string; refreshToken?: string; clientId?: string; clientSecret?: string; nrgClientSecret?: string };
       const { action, slot } = body;
 
-      if (!slot || slot === "default") {
-        return new Response(JSON.stringify({ error: "기본 계정은 변경할 수 없습니다" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      // NRG secret 업데이트 (slot 무관)
+      if (action === "set-nrg") {
+        const { nrgClientSecret } = body;
+        if (!nrgClientSecret) {
+          return new Response(JSON.stringify({ error: "nrgClientSecret 필요" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+        }
+        const r = await fetch(cfBase, { method: "PUT", headers: cfHeaders, body: JSON.stringify({ name: "NRG_CLIENT_SECRET", text: nrgClientSecret, type: "secret_text" }) });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({})) as { errors?: { message: string }[] };
+          return new Response(JSON.stringify({ error: err?.errors?.[0]?.message || "Cloudflare API 오류" }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+        }
+        return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
+
+      if (!slot) {
+        return new Response(JSON.stringify({ error: "slot 필요" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
+      // 기본 계정: refresh token만 업데이트 허용
+      if (slot === "default") {
+        if (action !== "set-token") {
+          return new Response(JSON.stringify({ error: "기본 계정은 set-token만 허용" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+        }
+        const { refreshToken } = body;
+        if (!refreshToken) {
+          return new Response(JSON.stringify({ error: "refreshToken 필요" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+        }
+        const r = await fetch(cfBase, { method: "PUT", headers: cfHeaders, body: JSON.stringify({ name: "GMAIL_REFRESH_TOKEN", text: refreshToken, type: "secret_text" }) });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({})) as { errors?: { message: string }[] };
+          return new Response(JSON.stringify({ error: err?.errors?.[0]?.message || "Cloudflare API 오류" }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+        }
+        return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
       const suffix = slot === "2" ? "_2" : slot === "3" ? "_3" : null;
       if (!suffix) {
-        return new Response(JSON.stringify({ error: "slot은 2 또는 3만 허용됩니다" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "slot은 default, 2, 3만 허용됩니다" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
       }
 
       if (action === "set") {
@@ -711,7 +743,7 @@ const worker = {
         return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
 
-      return new Response(JSON.stringify({ error: "action은 set 또는 delete" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "action은 set, set-token, delete, set-nrg 중 하나" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
     }
 
     if (url.pathname !== "/upload-rld" || request.method !== "POST") {

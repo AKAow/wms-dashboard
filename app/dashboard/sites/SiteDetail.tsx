@@ -16,6 +16,8 @@ type Tab = "overview" | "daily" | "monthly" | "simulation";
 
 const EXCEL_DISPLAY_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7", "ch8", "ch13", "ch14", "ch15", "ch16", "ch17", "ch21", "ch22"] as const;
 const EXCEL_WIND_SPEED_CHANNELS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7", "ch8"] as const;
+// North 센서만 (Shadow 센서 ch4/ch6/ch8은 타워 후류 영향으로 최대 돌풍 산출에서 제외)
+const WIND_SPEED_NORTH_CHANNELS = ["ch1", "ch2", "ch3", "ch5", "ch7"] as const;
 const EXCEL_WIND_DIR_CHANNELS = ["ch13", "ch14", "ch15", "ch16"] as const;
 const EXCEL_ATMO_CHANNELS = ["ch17", "ch21", "ch22"] as const;
 const RIGHT_SUMMARY_CLASS = ["right-[216px]", "right-[144px]", "right-[72px]", "right-0"] as const;
@@ -250,6 +252,15 @@ export default function SiteDetail({ site }: { site: Site }) {
   const dateInputRef = useRef<HTMLInputElement>(null);
   const monthInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
+  // 8채널 동시 표시 차트 접근성: 기본은 Shadow 센서(ch4/6/8) 숨김, 범례 클릭으로 토글
+  const [hiddenChannels, setHiddenChannels] = useState<Set<string>>(new Set(["ch4", "ch6", "ch8"]));
+  const toggleChannel = useCallback((ch: string) => {
+    setHiddenChannels((prev) => {
+      const next = new Set(prev);
+      if (next.has(ch)) next.delete(ch); else next.add(ch);
+      return next;
+    });
+  }, []);
 
   // DB 커스텀 커브 로드
   useEffect(() => {
@@ -416,14 +427,14 @@ export default function SiteDetail({ site }: { site: Site }) {
 
   const overviewChartData = Object.entries(overviewMonthlyPreview).map(([date, vals]) => ({
     date: date.slice(5),
-    ch1: vals.ch1 ?? 0,
-    ch2: vals.ch2 ?? 0,
-    ch3: vals.ch3 ?? 0,
-    ch4: vals.ch4 ?? 0,
-    ch5: vals.ch5 ?? 0,
-    ch6: vals.ch6 ?? 0,
-    ch7: vals.ch7 ?? 0,
-    ch8: vals.ch8 ?? 0,
+    ch1: vals.ch1 ?? null,
+    ch2: vals.ch2 ?? null,
+    ch3: vals.ch3 ?? null,
+    ch4: vals.ch4 ?? null,
+    ch5: vals.ch5 ?? null,
+    ch6: vals.ch6 ?? null,
+    ch7: vals.ch7 ?? null,
+    ch8: vals.ch8 ?? null,
   }));
 
   const overviewChartSeries = useMemo(() => {
@@ -431,8 +442,8 @@ export default function SiteDetail({ site }: { site: Site }) {
     if (overviewKpiPeriod === "day") {
       return dailyExcelData.map((m) => ({
         date: m.time,
-        ch1: m.ch1 ?? 0, ch2: m.ch2 ?? 0, ch3: m.ch3 ?? 0, ch4: m.ch4 ?? 0,
-        ch5: m.ch5 ?? 0, ch6: m.ch6 ?? 0, ch7: m.ch7 ?? 0, ch8: m.ch8 ?? 0,
+        ch1: m.ch1 ?? null, ch2: m.ch2 ?? null, ch3: m.ch3 ?? null, ch4: m.ch4 ?? null,
+        ch5: m.ch5 ?? null, ch6: m.ch6 ?? null, ch7: m.ch7 ?? null, ch8: m.ch8 ?? null,
       }));
     }
     // 월간: 선택 월 일별 평균
@@ -459,21 +470,21 @@ export default function SiteDetail({ site }: { site: Site }) {
     }
     return Array.from(monthMap.values()).map((r) => ({
       date: r.date,
-      ch1: r.c1 ? r.ch1 / r.c1 : 0, ch2: r.c2 ? r.ch2 / r.c2 : 0,
-      ch3: r.c3 ? r.ch3 / r.c3 : 0, ch4: r.c4 ? r.ch4 / r.c4 : 0,
-      ch5: r.c5 ? r.ch5 / r.c5 : 0, ch6: r.c6 ? r.ch6 / r.c6 : 0,
-      ch7: r.c7 ? r.ch7 / r.c7 : 0, ch8: r.c8 ? r.ch8 / r.c8 : 0,
+      ch1: r.c1 ? r.ch1 / r.c1 : null, ch2: r.c2 ? r.ch2 / r.c2 : null,
+      ch3: r.c3 ? r.ch3 / r.c3 : null, ch4: r.c4 ? r.ch4 / r.c4 : null,
+      ch5: r.c5 ? r.ch5 / r.c5 : null, ch6: r.c6 ? r.ch6 / r.c6 : null,
+      ch7: r.c7 ? r.ch7 / r.c7 : null, ch8: r.c8 ? r.ch8 / r.c8 : null,
     }));
   }, [overviewKpiPeriod, overviewChartData, dailyStats, dailyExcelData]);
 
   const excelMonthlyChartData = useMemo(() => {
     const rows = selectedMonthStats
       .filter((s) => ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7", "ch8"].includes(s.channel))
-      .reduce<Record<string, { date: string; ch1: number; ch2: number; ch3: number; ch4: number; ch5: number; ch6: number; ch7: number; ch8: number }>>((acc, s) => {
+      .reduce<Record<string, { date: string; ch1: number | null; ch2: number | null; ch3: number | null; ch4: number | null; ch5: number | null; ch6: number | null; ch7: number | null; ch8: number | null }>>((acc, s) => {
         if (!acc[s.date]) {
-          acc[s.date] = { date: s.date.slice(5), ch1: 0, ch2: 0, ch3: 0, ch4: 0, ch5: 0, ch6: 0, ch7: 0, ch8: 0 };
+          acc[s.date] = { date: s.date.slice(5), ch1: null, ch2: null, ch3: null, ch4: null, ch5: null, ch6: null, ch7: null, ch8: null };
         }
-        const v = s.avg_value ?? 0;
+        const v = s.avg_value ?? null;
         if (s.channel === "ch1") acc[s.date].ch1 = v;
         if (s.channel === "ch2") acc[s.date].ch2 = v;
         if (s.channel === "ch3") acc[s.date].ch3 = v;
@@ -612,7 +623,7 @@ export default function SiteDetail({ site }: { site: Site }) {
   }, [monthRows]);
 
   const monthMaxGust = useMemo(() => {
-    const rows = monthRows.filter((r) => ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"].includes(r.channel) && typeof r.max_value === "number");
+    const rows = monthRows.filter((r) => (WIND_SPEED_NORTH_CHANNELS as readonly string[]).includes(r.channel) && typeof r.max_value === "number");
     if (!rows.length) return null;
     return Math.max(...rows.map((r) => r.max_value as number));
   }, [monthRows]);
@@ -671,7 +682,7 @@ export default function SiteDetail({ site }: { site: Site }) {
   const sparkMaxGust = useMemo(() => {
     const byDate = new Map<string, number>();
     for (const r of monthRows) {
-      if (!["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"].includes(r.channel)) continue;
+      if (!(WIND_SPEED_NORTH_CHANNELS as readonly string[]).includes(r.channel)) continue;
       if (typeof r.max_value !== "number") continue;
       const prev = byDate.get(r.date);
       if (prev == null || r.max_value > prev) byDate.set(r.date, r.max_value);
@@ -772,24 +783,34 @@ export default function SiteDetail({ site }: { site: Site }) {
       if (vals.length > 0) channelAvg.set(ch, vals.reduce((a, b) => a + b, 0) / vals.length);
     }
 
-    // ch1(100m)과 ch7(40m) 쌍으로 α 계산
-    const v1 = channelAvg.get("ch1");
-    const v7 = channelAvg.get("ch7");
-    const h1 = SHEAR_HEIGHTS["ch1"];
-    const h7 = SHEAR_HEIGHTS["ch7"];
+    // 동일 높이 North/Shadow 센서 쌍(80m: ch3/ch4, 60m: ch5/ch6, 40m: ch7/ch8) 평균 처리
+    const heightSpeeds = new Map<number, number[]>();
+    for (const [ch, height] of Object.entries(SHEAR_HEIGHTS)) {
+      const v = channelAvg.get(ch);
+      if (v == null) continue;
+      if (!heightSpeeds.has(height)) heightSpeeds.set(height, []);
+      heightSpeeds.get(height)!.push(v);
+    }
+    const heightAvg = Array.from(heightSpeeds.entries())
+      .map(([height, speeds]) => ({ height, speed: speeds.reduce((a, b) => a + b, 0) / speeds.length }))
+      .sort((a, b) => b.height - a.height);
 
-    if (!v1 || !v7 || v1 <= 0 || v7 <= 0) return null;
-    const alpha = Math.log(v1 / v7) / Math.log(h1 / h7);
+    if (heightAvg.length < 2) return null;
 
-    // 수직 풍속 프로파일 — 데이터 있는 채널만
-    const profile = Object.entries(SHEAR_HEIGHTS)
-      .filter(([ch]) => channelAvg.has(ch))
-      .map(([ch, height]) => ({
-        height,
-        speed: channelAvg.get(ch)!,
-        ch,
-      }))
-      .sort((a, b) => b.height - a.height); // 높이 내림차순
+    // Power Law α — 전체 높이 로그선형 최소자승 회귀 (ln v = ln A + α·ln h)
+    const n = heightAvg.length;
+    const xs = heightAvg.map((p) => Math.log(p.height));
+    const ys = heightAvg.map((p) => Math.log(p.speed));
+    const sumX = xs.reduce((a, b) => a + b, 0);
+    const sumY = ys.reduce((a, b) => a + b, 0);
+    const sumXY = xs.reduce((a, x, i) => a + x * ys[i], 0);
+    const sumXX = xs.reduce((a, x) => a + x * x, 0);
+    const denom = n * sumXX - sumX * sumX;
+    if (denom === 0) return null;
+    const alpha = (n * sumXY - sumX * sumY) / denom;
+
+    // 수직 풍속 프로파일 — 높이별 평균값 (North/Shadow 통합)
+    const profile = heightAvg.map((p) => ({ height: p.height, speed: p.speed, ch: `${p.height}m` }));
 
     return { alpha, profile };
   }, [selectedMonthStats]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -809,7 +830,7 @@ export default function SiteDetail({ site }: { site: Site }) {
   }, [dailyStats]);
 
   const allMaxGust = useMemo(() => {
-    const rows = dailyStats.filter((r) => ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"].includes(r.channel) && typeof r.max_value === "number");
+    const rows = dailyStats.filter((r) => (WIND_SPEED_NORTH_CHANNELS as readonly string[]).includes(r.channel) && typeof r.max_value === "number");
     if (!rows.length) return null;
     return Math.max(...rows.map((r) => r.max_value as number));
   }, [dailyStats]);
@@ -841,8 +862,7 @@ export default function SiteDetail({ site }: { site: Site }) {
   }, [dailyExcelData]);
 
   const dayMaxGust = useMemo(() => {
-    const chKeys = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch7"] as const;
-    const values = dailyExcelData.flatMap((m) => chKeys.map((ch) => m[ch]).filter((v): v is number => typeof v === "number"));
+    const values = dailyExcelData.flatMap((m) => WIND_SPEED_NORTH_CHANNELS.map((ch) => m[ch]).filter((v): v is number => typeof v === "number"));
     if (!values.length) return null;
     return Math.max(...values);
   }, [dailyExcelData]);
@@ -1361,7 +1381,7 @@ export default function SiteDetail({ site }: { site: Site }) {
           <div className="sub">{site.location_name ?? "위치 미입력"} · 최근 동기화 {latestDataDate}</div>
         </div>
         <div className="actions">
-          <button onClick={downloadMonthlyExcel} className="btn btn-primary"><Download size={15} />Export report</button>
+          <button onClick={downloadMonthlyExcel} className="btn btn-primary"><Download size={15} />월간 리포트 다운로드</button>
         </div>
       </div>
 
@@ -1373,6 +1393,15 @@ export default function SiteDetail({ site }: { site: Site }) {
           </button>
         ))}
       </div>
+      <p className="text-xs text-slate-400">
+        {tab === "overview"
+          ? "요약 대시보드 — KPI, 추이, 풍배도를 한눈에 확인합니다. 원자료 테이블은 일별/월별 탭에서 확인하세요."
+          : tab === "daily"
+          ? "선택 날짜의 10분 단위 원자료 전체를 확인합니다."
+          : tab === "monthly"
+          ? "선택 월의 일별 통계와 Weibull·전단 분석, 고객사 제출용 엑셀을 확인합니다."
+          : "터빈 시나리오 기반 발전량 및 사업성 추정치를 확인합니다."}
+      </p>
 
       {tab === "overview" && (
         <div className="space-y-4">
@@ -1394,6 +1423,11 @@ export default function SiteDetail({ site }: { site: Site }) {
                 className="text-xs border border-[#c8def8] rounded-lg px-2 py-1 text-slate-700 bg-white focus:outline-none focus:border-blue-500" />
             )}
           </div>
+          <div className="text-[11px] text-slate-500">
+            아래 KPI 기준: <span className="font-semibold text-blue-700">
+              {overviewKpiPeriod === "all" ? "전체 기간" : overviewKpiPeriod === "month" ? `${selectedMonth} 월간` : `${selectedDate} 일별`}
+            </span>
+          </div>
           <div className="kpi-row">
             <div className="kpi-card">
               <div className="k-icon"><Wind size={16} /></div>
@@ -1403,7 +1437,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
             <div className="kpi-card">
               <div className="k-icon"><BarChart2 size={16} /></div>
-              <div className="k-label">난류 강도</div>
+              <div className="k-label" title="일 평균 풍속의 일중 변동계수(σ/μ×100). IEC 61400-1 표준 난류강도(고빈도 샘플 기반)와는 다른 지표입니다.">풍속 변동계수 (CV)</div>
               <div className="k-num">{toFixedOrDash(activeTI, 1)}<span className="u">%</span></div>
               <div className="k-foot"><span className={`k-delta ${tiTrend.cls}`}>{tiTrend.text}</span><MiniSparkline points={sparkTI} color="#10b981" /></div>
             </div>
@@ -1434,21 +1468,22 @@ export default function SiteDetail({ site }: { site: Site }) {
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={overviewChartSeries}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} interval="preserveStartEnd" minTickGap={20} />
                   <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
                   <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
-                  <Legend wrapperStyle={{ fontSize: "12px" }} />
-                  <Line type="monotone" dataKey="ch1" name="100m 풍속" stroke={CHART_COLORS.ch1} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch2" name="96m 풍속" stroke={CHART_COLORS.ch2} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch3" name="80m 풍속" stroke={CHART_COLORS.ch3} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch4" name="80m 풍속(S)" stroke={CHART_COLORS.ch4} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch5" name="60m 풍속" stroke={CHART_COLORS.ch5} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch6" name="60m 풍속(S)" stroke={CHART_COLORS.ch6} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch7" name="40m 풍속" stroke={CHART_COLORS.ch7} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch8" name="40m 풍속(S)" stroke={CHART_COLORS.ch8} dot={false} strokeWidth={2} />
+                  <Legend wrapperStyle={{ fontSize: "12px", cursor: "pointer" }} onClick={(e) => toggleChannel(String(e.dataKey))} formatter={(value, entry) => <span style={{ opacity: hiddenChannels.has(String((entry as { dataKey?: string }).dataKey)) ? 0.35 : 1 }}>{value}</span>} />
+                  <Line type="monotone" dataKey="ch1" name="100m 풍속" stroke={CHART_COLORS.ch1} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch1")} />
+                  <Line type="monotone" dataKey="ch2" name="96m 풍속" stroke={CHART_COLORS.ch2} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch2")} />
+                  <Line type="monotone" dataKey="ch3" name="80m 풍속" stroke={CHART_COLORS.ch3} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch3")} />
+                  <Line type="monotone" dataKey="ch4" name="80m 풍속(S)" stroke={CHART_COLORS.ch4} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch4")} />
+                  <Line type="monotone" dataKey="ch5" name="60m 풍속" stroke={CHART_COLORS.ch5} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch5")} />
+                  <Line type="monotone" dataKey="ch6" name="60m 풍속(S)" stroke={CHART_COLORS.ch6} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch6")} />
+                  <Line type="monotone" dataKey="ch7" name="40m 풍속" stroke={CHART_COLORS.ch7} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch7")} />
+                  <Line type="monotone" dataKey="ch8" name="40m 풍속(S)" stroke={CHART_COLORS.ch8} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch8")} />
                 </LineChart>
               </ResponsiveContainer>
             )}
+            <p className="text-[11px] text-slate-400 mt-1">(S) = Shadow 센서(타워 후류측, 풍향에 따라 값이 저평가될 수 있음). 기본적으로 범례에서 숨김 처리 — 클릭 시 표시</p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-3 items-stretch">
@@ -1523,7 +1558,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart data={estimateRowsForPeriod}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
+                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} interval="preserveStartEnd" minTickGap={20} />
                       <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" MWh" />
                       <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
                       <Legend wrapperStyle={{ fontSize: "12px" }} />
@@ -1637,8 +1672,8 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <XAxis dataKey="time" tick={{ fontSize: 10, fill: "#64748b" }} interval={11} />
                   <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
                   <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  {EXCEL_WIND_SPEED_CHANNELS.map((ch) => <Line key={ch} type="monotone" dataKey={ch} name={CHANNEL_LABELS[ch]} stroke={CHART_COLORS[ch] ?? "#3b82f6"} dot={false} strokeWidth={1.8} />)}
+                  <Legend wrapperStyle={{ fontSize: "11px", cursor: "pointer" }} onClick={(e) => toggleChannel(String(e.dataKey))} formatter={(value, entry) => <span style={{ opacity: hiddenChannels.has(String((entry as { dataKey?: string }).dataKey)) ? 0.35 : 1 }}>{value}</span>} />
+                  {EXCEL_WIND_SPEED_CHANNELS.map((ch) => <Line key={ch} type="monotone" dataKey={ch} name={CHANNEL_LABELS[ch]} stroke={CHART_COLORS[ch] ?? "#3b82f6"} dot={false} strokeWidth={1.8} hide={hiddenChannels.has(ch)} />)}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -1684,7 +1719,10 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
-              <div className="p-4 border-b border-[#d6e8ff] flex items-center gap-2 text-slate-900 text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />일별 10분 평균 데이터</div>
+              <div className="p-4 border-b border-[#d6e8ff] flex items-center justify-between gap-2 text-slate-900 text-sm font-semibold">
+                <span className="flex items-center gap-2"><Table2 className="w-4 h-4 text-blue-400" />일별 10분 평균 데이터</span>
+                <span className="text-[11px] font-normal text-slate-400">← 좌우로 스크롤하여 전체 시간대 확인 →</span>
+              </div>
               <div className="overflow-x-auto overflow-y-visible">
                 <table className="w-full min-w-[2400px] border-separate border-spacing-0">
                   <thead>
@@ -1757,20 +1795,21 @@ export default function SiteDetail({ site }: { site: Site }) {
               <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={excelMonthlyChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b" }} interval="preserveStartEnd" minTickGap={20} />
                   <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" m/s" />
                   <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
-                  <Legend wrapperStyle={{ fontSize: "12px" }} />
-                  <Line type="monotone" dataKey="ch1" name="100m 풍속 (N)" stroke={CHART_COLORS.ch1} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch2" name="96m 풍속 (N)" stroke={CHART_COLORS.ch2} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch3" name="80m 풍속 (N)" stroke={CHART_COLORS.ch3} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch4" name="80m 풍속 (S)" stroke={CHART_COLORS.ch4} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch5" name="60m 풍속 (N)" stroke={CHART_COLORS.ch5} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch6" name="60m 풍속 (S)" stroke={CHART_COLORS.ch6} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch7" name="40m 풍속 (N)" stroke={CHART_COLORS.ch7} dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="ch8" name="40m 풍속 (S)" stroke={CHART_COLORS.ch8} dot={false} strokeWidth={2} />
+                  <Legend wrapperStyle={{ fontSize: "12px", cursor: "pointer" }} onClick={(e) => toggleChannel(String(e.dataKey))} formatter={(value, entry) => <span style={{ opacity: hiddenChannels.has(String((entry as { dataKey?: string }).dataKey)) ? 0.35 : 1 }}>{value}</span>} />
+                  <Line type="monotone" dataKey="ch1" name="100m 풍속 (N)" stroke={CHART_COLORS.ch1} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch1")} />
+                  <Line type="monotone" dataKey="ch2" name="96m 풍속 (N)" stroke={CHART_COLORS.ch2} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch2")} />
+                  <Line type="monotone" dataKey="ch3" name="80m 풍속 (N)" stroke={CHART_COLORS.ch3} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch3")} />
+                  <Line type="monotone" dataKey="ch4" name="80m 풍속 (S)" stroke={CHART_COLORS.ch4} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch4")} />
+                  <Line type="monotone" dataKey="ch5" name="60m 풍속 (N)" stroke={CHART_COLORS.ch5} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch5")} />
+                  <Line type="monotone" dataKey="ch6" name="60m 풍속 (S)" stroke={CHART_COLORS.ch6} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch6")} />
+                  <Line type="monotone" dataKey="ch7" name="40m 풍속 (N)" stroke={CHART_COLORS.ch7} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch7")} />
+                  <Line type="monotone" dataKey="ch8" name="40m 풍속 (S)" stroke={CHART_COLORS.ch8} dot={false} strokeWidth={2} hide={hiddenChannels.has("ch8")} />
                 </LineChart>
               </ResponsiveContainer>
+              <p className="text-[11px] text-slate-400 mt-1">(N) = North 센서 · (S) = Shadow 센서(타워 후류측). 기본적으로 (S)는 범례에서 숨김 처리 — 클릭 시 표시</p>
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
@@ -1852,7 +1891,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                 <Wind className="w-4 h-4 text-blue-400" />풍속 전단 분석 (Wind Shear · {selectedMonth})
               </h3>
               {!windShearStats ? (
-                <div className="text-center py-8 text-slate-500 text-sm">ch1(100m) / ch7(40m) 데이터 부족</div>
+                <div className="text-center py-8 text-slate-500 text-sm">최소 2개 높이 이상의 풍속 데이터가 필요합니다</div>
               ) : (
                 <>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
@@ -1864,15 +1903,15 @@ export default function SiteDetail({ site }: { site: Site }) {
                       </div>
                     </div>
                     <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3">
-                      <div className="text-xs text-slate-500 mb-1">100m 평균 풍속</div>
+                      <div className="text-xs text-slate-500 mb-1">최고층 평균 풍속 ({windShearStats.profile[0]?.height ?? "-"}m)</div>
                       <div className="text-lg font-bold text-slate-900">
-                        {windShearStats.profile.find((p) => p.ch === "ch1")?.speed.toFixed(2) ?? "-"} m/s
+                        {windShearStats.profile[0]?.speed.toFixed(2) ?? "-"} m/s
                       </div>
                     </div>
                     <div className="rounded-lg border border-[#d6e8ff] bg-white px-4 py-3">
-                      <div className="text-xs text-slate-500 mb-1">40m 평균 풍속</div>
+                      <div className="text-xs text-slate-500 mb-1">최저층 평균 풍속 ({windShearStats.profile[windShearStats.profile.length - 1]?.height ?? "-"}m)</div>
                       <div className="text-lg font-bold text-slate-900">
-                        {windShearStats.profile.find((p) => p.ch === "ch7")?.speed.toFixed(2) ?? "-"} m/s
+                        {windShearStats.profile[windShearStats.profile.length - 1]?.speed.toFixed(2) ?? "-"} m/s
                       </div>
                     </div>
                   </div>
@@ -1890,13 +1929,16 @@ export default function SiteDetail({ site }: { site: Site }) {
                       <Line type="monotone" dataKey="speed" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 5, fill: "#3b82f6" }} />
                     </LineChart>
                   </ResponsiveContainer>
-                  <p className="text-[11px] text-slate-400 mt-2">Power Law: α = log(V₂/V₁) / log(H₂/H₁) · ch1(100m) ↔ ch7(40m)</p>
+                  <p className="text-[11px] text-slate-400 mt-2">Power Law: ln(V) = ln(A) + α·ln(H) 최소자승 회귀 · {windShearStats.profile.length}개 높이 · North/Shadow 센서 평균 통합</p>
                 </>
               )}
             </div>
 
             <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl overflow-hidden">
-              <div className="p-4 border-b border-[#d6e8ff] flex items-center gap-2 text-slate-900 text-sm font-semibold"><Table2 className="w-4 h-4 text-blue-400" />월별 통계 데이터</div>
+              <div className="p-4 border-b border-[#d6e8ff] flex items-center justify-between gap-2 text-slate-900 text-sm font-semibold">
+                <span className="flex items-center gap-2"><Table2 className="w-4 h-4 text-blue-400" />월별 통계 데이터</span>
+                <span className="text-[11px] font-normal text-slate-400">← 좌우로 스크롤하여 전체 날짜 확인 →</span>
+              </div>
               <div className="overflow-x-auto overflow-y-visible">
                 <table className="w-full min-w-[2200px] border-separate border-spacing-0">
                   <thead>
@@ -2141,7 +2183,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <th className="text-right px-2 py-2">P50</th>
                   <th className="text-right px-2 py-2">P75</th>
                   <th className="text-right px-2 py-2">P90</th>
-                  <th className="text-right px-2 py-2">적용손실</th>
+                  <th className="text-right px-2 py-2">적용 손실률</th>
                 </tr>
               </thead>
               <tbody>

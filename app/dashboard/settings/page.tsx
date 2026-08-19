@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Settings, Key, Mail, Globe, CheckCircle, Loader2, CalendarDays, Plus, Trash2, AlertCircle } from "lucide-react";
+import { Settings, Key, Mail, CheckCircle, Loader2, CalendarDays, Plus, Trash2, AlertCircle, Play } from "lucide-react";
 
 const WORKER_BASE = "https://wms-rld-worker.aka-74b.workers.dev";
 const DAYS = ["매일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"] as const;
@@ -15,17 +15,48 @@ type GmailAccount = {
   set: boolean;
 };
 
+type SaveState = "idle" | "saving" | "saved" | "error";
+
+function useSaveState(): [SaveState, string, (fn: () => Promise<void>) => void] {
+  const [state, setState] = useState<SaveState>("idle");
+  const [error, setError] = useState("");
+  const run = useCallback((fn: () => Promise<void>) => {
+    setState("saving");
+    setError("");
+    fn()
+      .then(() => {
+        setState("saved");
+        setTimeout(() => setState("idle"), 2500);
+      })
+      .catch((e: unknown) => {
+        setError(e instanceof Error ? e.message : "저장 실패");
+        setState("error");
+      });
+  }, []);
+  return [state, error, run];
+}
+
 export default function SettingsPage() {
-  const [nrgClientId, setNrgClientId] = useState("YPFS53vAxMLrbkaAOhwaMC8R8zhKGI0A");
+  // NRG
   const [nrgSecret, setNrgSecret] = useState("");
-  const [dashboardUrl, setDashboardUrl] = useState("https://wms-dashboard-ckn.pages.dev");
+  const [nrgState, nrgError, runNrg] = useSaveState();
+
+  // 스케줄
   const [syncDay, setSyncDay] = useState<(typeof DAYS)[number]>("수요일");
   const [syncTime, setSyncTime] = useState<(typeof TIMES)[number]>("10:00");
   const [loadingCron, setLoadingCron] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [saveError, setSaveError] = useState("");
+  const [cronState, cronError, runCron] = useSaveState();
 
+  // 수동 동기화
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState("");
+
+  // Gmail 기본 계정
+  const [defaultEmail, setDefaultEmail] = useState<string | null>(null);
+  const [defaultToken, setDefaultToken] = useState("");
+  const [defaultState, defaultError, runDefault] = useSaveState();
+
+  // Gmail 추가 계정
   const [accounts, setAccounts] = useState<GmailAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [addingSlot, setAddingSlot] = useState<string | null>(null);
@@ -38,7 +69,11 @@ export default function SettingsPage() {
     try {
       const r = await fetch(`${WORKER_BASE}/worker-secrets`, { cache: "no-store" });
       const d = (await r.json()) as { ok?: boolean; accounts?: GmailAccount[] };
-      if (d.ok && d.accounts) setAccounts(d.accounts);
+      if (d.ok && d.accounts) {
+        setAccounts(d.accounts);
+        const def = d.accounts.find((a) => a.slot === "default");
+        if (def) setDefaultEmail(def.email);
+      }
     } catch {
       // 오류 무시
     } finally {
@@ -72,24 +107,63 @@ export default function SettingsPage() {
 
   useEffect(() => { void loadAccounts(); }, [loadAccounts]);
 
-  const handleSave = async () => {
-    setSaveError("");
-    setSaving(true);
-    try {
+  const handleNrgSave = () => {
+    if (!nrgSecret.trim()) return;
+    runNrg(async () => {
+      const r = await fetch(`${WORKER_BASE}/worker-secrets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set-nrg", nrgClientSecret: nrgSecret.trim() }),
+      });
+      const d = await r.json().catch(() => ({})) as { ok?: boolean; error?: string };
+      if (!r.ok || !d.ok) throw new Error(d.error || "저장 실패");
+      setNrgSecret("");
+    });
+  };
+
+  const handleCronSave = () => {
+    runCron(async () => {
       const r = await fetch(`${WORKER_BASE}/cron-config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dayKst: syncDay, hourKst: Number(syncTime.split(":")[0]), minuteKst: 0 }),
       });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok || !d?.ok) throw new Error(d?.error || "cron-update-failed");
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
+      const d = await r.json().catch(() => ({})) as { ok?: boolean; error?: string };
+      if (!r.ok || !d.ok) throw new Error(d.error || "cron-update-failed");
+    });
+  };
+
+  const handleManualSync = async () => {
+    setSyncing(true);
+    setSyncResult("");
+    try {
+      const r = await fetch(`${WORKER_BASE}/sync-rld`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const d = await r.json().catch(() => ({})) as { ok?: boolean; processed?: number; error?: string };
+      if (!r.ok || !d.ok) throw new Error(d.error || "sync-failed");
+      setSyncResult(`완료: ${d.processed ?? 0}개 처리`);
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "저장 실패");
+      setSyncResult(`오류: ${e instanceof Error ? e.message : "실패"}`);
     } finally {
-      setSaving(false);
+      setSyncing(false);
     }
+  };
+
+  const handleDefaultTokenSave = () => {
+    if (!defaultToken.trim()) return;
+    runDefault(async () => {
+      const r = await fetch(`${WORKER_BASE}/worker-secrets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set-token", slot: "default", refreshToken: defaultToken.trim() }),
+      });
+      const d = await r.json().catch(() => ({})) as { ok?: boolean; error?: string };
+      if (!r.ok || !d.ok) throw new Error(d.error || "저장 실패");
+      setDefaultToken("");
+    });
   };
 
   const handleGmailAdd = async (slot: string) => {
@@ -138,7 +212,8 @@ export default function SettingsPage() {
     }
   };
 
-  const availableSlots = accounts.filter((a) => a.slot !== "default" && !a.set);
+  const extraAccounts = accounts.filter((a) => a.slot !== "default");
+  const availableSlots = extraAccounts.filter((a) => !a.set);
 
   return (
     <div className="space-y-6">
@@ -148,6 +223,8 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-4">
+
+        {/* NRG Cloud API */}
         <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-lg bg-blue-400/10"><Key className="w-5 h-5 text-blue-400" /></div>
@@ -158,65 +235,146 @@ export default function SettingsPage() {
           </div>
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Client ID</label>
-              <input type="text" value={nrgClientId} onChange={(e) => setNrgClientId(e.target.value)} className="w-full rounded-xl border border-[#c8def8] bg-white/70 px-4 py-2.5 text-sm font-mono text-slate-700 focus:border-blue-500 focus:outline-none" />
-            </div>
-            <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Client Secret</label>
-              <input type="password" value={nrgSecret} onChange={(e) => setNrgSecret(e.target.value)} placeholder="새 시크릿 입력 시에만 입력" className="w-full rounded-xl border border-[#c8def8] bg-white/70 px-4 py-2.5 text-sm font-mono text-slate-700 focus:border-blue-500 focus:outline-none" />
+              <input
+                type="password"
+                value={nrgSecret}
+                onChange={(e) => setNrgSecret(e.target.value)}
+                placeholder="새 시크릿 입력 시에만 입력"
+                className="w-full rounded-xl border border-[#c8def8] bg-white/70 px-4 py-2.5 text-sm font-mono text-slate-700 focus:border-blue-500 focus:outline-none"
+              />
             </div>
-            <div className="flex items-center gap-2 pt-1">
-              <span className="w-2 h-2 rounded-full bg-green-400" />
-              <span className="text-xs text-green-400">연결됨</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-green-400" />
+                <span className="text-xs text-green-400">연결됨</span>
+              </div>
+              <button
+                onClick={handleNrgSave}
+                disabled={nrgState === "saving" || !nrgSecret.trim()}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-medium text-white transition-colors disabled:opacity-60 flex items-center gap-1.5"
+              >
+                {nrgState === "saving" ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />저장 중</> : nrgState === "saved" ? <><CheckCircle className="w-3.5 h-3.5" />저장됨</> : <><Key className="w-3.5 h-3.5" />Secret 저장</>}
+              </button>
             </div>
+            {nrgState === "error" && <p className="text-xs text-red-400 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" />{nrgError}</p>}
           </div>
         </div>
 
+        {/* 자동 동기화 스케줄 */}
         <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-lg bg-red-400/10"><Mail className="w-5 h-5 text-red-400" /></div>
+            <div className="p-2 rounded-lg bg-orange-400/10"><CalendarDays className="w-5 h-5 text-orange-400" /></div>
             <div>
               <h3 className="text-sm font-semibold text-slate-900">자동 동기화 스케줄</h3>
               <p className="text-xs text-slate-500">Gmail 필터는 사이트별 설정에서 관리</p>
             </div>
           </div>
-          <div className="space-y-3 text-sm">
+          <div className="space-y-4">
             <div className="flex items-center justify-between gap-4">
-              <span className="text-slate-500">동기화 주기</span>
+              <span className="text-sm text-slate-500">동기화 주기</span>
               <div className="flex items-center gap-2">
-                <CalendarDays className="w-4 h-4 text-blue-400" />
-                <select value={syncDay} onChange={(e) => setSyncDay(e.target.value as (typeof DAYS)[number])} disabled={loadingCron} className="rounded-lg border border-[#c8def8] bg-white/70 px-3 py-1.5 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:opacity-60">
+                <select
+                  value={syncDay}
+                  onChange={(e) => setSyncDay(e.target.value as (typeof DAYS)[number])}
+                  disabled={loadingCron}
+                  className="rounded-lg border border-[#c8def8] bg-white/70 px-3 py-1.5 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:opacity-60"
+                >
                   {DAYS.map((day) => <option key={day} value={day}>{day}</option>)}
                 </select>
-                {syncDay !== "매일" && (
-                  <span className="text-xs text-slate-400">요일</span>
-                )}
-                <select value={syncTime} onChange={(e) => setSyncTime(e.target.value as (typeof TIMES)[number])} disabled={loadingCron} className="rounded-lg border border-[#c8def8] bg-white/70 px-3 py-1.5 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:opacity-60">
-                  {TIMES.map((time) => <option key={time} value={time}>{time}</option>)}
+                <select
+                  value={syncTime}
+                  onChange={(e) => setSyncTime(e.target.value as (typeof TIMES)[number])}
+                  disabled={loadingCron}
+                  className="rounded-lg border border-[#c8def8] bg-white/70 px-3 py-1.5 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:opacity-60"
+                >
+                  {TIMES.map((time) => <option key={time} value={time}>{time} KST</option>)}
                 </select>
               </div>
             </div>
-            <div className="flex justify-between"><span className="text-slate-500">상태</span><span className="text-green-400">활성</span></div>
-            <p className="text-xs text-slate-500 pt-2 border-t border-[#d6e8ff]">
-              현재 설정: {syncDay === "매일" ? `매일 ${syncTime} KST` : `주 1회 ${syncDay} ${syncTime} KST`}
+
+            <p className="text-xs text-slate-500 pt-1 border-t border-[#d6e8ff]">
+              현재 설정: {syncDay === "매일" ? `매일 ${syncTime}` : `주 1회 ${syncDay} ${syncTime}`} KST
             </p>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCronSave}
+                disabled={cronState === "saving" || loadingCron}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-medium text-white transition-colors disabled:opacity-60 flex items-center gap-1.5"
+              >
+                {cronState === "saving" ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />저장 중</> : cronState === "saved" ? <><CheckCircle className="w-3.5 h-3.5" />저장됨</> : <><Settings className="w-3.5 h-3.5" />스케줄 저장</>}
+              </button>
+              <button
+                onClick={handleManualSync}
+                disabled={syncing}
+                className="px-4 py-2 rounded-lg border border-[#c8def8] bg-white/70 hover:bg-slate-50 text-xs font-medium text-slate-700 transition-colors disabled:opacity-60 flex items-center gap-1.5"
+              >
+                {syncing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />동기화 중</> : <><Play className="w-3.5 h-3.5" />지금 동기화</>}
+              </button>
+            </div>
+            {cronState === "error" && <p className="text-xs text-red-400 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" />{cronError}</p>}
+            {syncResult && <p className="text-xs text-slate-500">{syncResult}</p>}
           </div>
         </div>
 
-        {/* Gmail 수신 계정 관리 */}
+        {/* Gmail 기본 계정 */}
+        <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-red-400/10"><Mail className="w-5 h-5 text-red-400" /></div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Gmail 기본 계정</h3>
+              <p className="text-xs text-slate-500">토큰 만료 시 Refresh Token 업데이트</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Gmail 계정</label>
+              <input
+                type="text"
+                value={loadingAccounts ? "불러오는 중..." : (defaultEmail ?? "(미설정)")}
+                readOnly
+                className="w-full rounded-xl border border-[#c8def8] bg-slate-50/70 px-4 py-2.5 text-sm text-slate-500 cursor-default"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">새 Refresh Token</label>
+              <input
+                type="password"
+                value={defaultToken}
+                onChange={(e) => setDefaultToken(e.target.value)}
+                placeholder="1//0g... 형식의 Refresh Token"
+                className="w-full rounded-xl border border-[#c8def8] bg-white/70 px-4 py-2.5 text-sm font-mono text-slate-700 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center justify-end">
+              <button
+                onClick={handleDefaultTokenSave}
+                disabled={defaultState === "saving" || !defaultToken.trim()}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-medium text-white transition-colors disabled:opacity-60 flex items-center gap-1.5"
+              >
+                {defaultState === "saving" ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />저장 중</> : defaultState === "saved" ? <><CheckCircle className="w-3.5 h-3.5" />저장됨</> : "토큰 업데이트"}
+              </button>
+            </div>
+            {defaultState === "error" && <p className="text-xs text-red-400 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" />{defaultError}</p>}
+          </div>
+        </div>
+
+        {/* Gmail 추가 계정 관리 */}
         <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-green-400/10"><Mail className="w-5 h-5 text-green-500" /></div>
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">Gmail 수신 계정 관리</h3>
-                <p className="text-xs text-slate-500">사이트별 수신 계정 추가 (슬롯 2·3)</p>
+                <h3 className="text-sm font-semibold text-slate-900">Gmail 추가 계정</h3>
+                <p className="text-xs text-slate-500">사이트별 수신 계정 (슬롯 2·3)</p>
               </div>
             </div>
             {availableSlots.length > 0 && !addingSlot && (
               <button
                 onClick={() => { setAddingSlot(availableSlots[0].slot); setGmailError(""); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-medium text-white transition-colors">
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-medium text-white transition-colors"
+              >
                 <Plus className="w-3.5 h-3.5" /> 계정 추가
               </button>
             )}
@@ -228,20 +386,21 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {accounts.map((acc) => (
+              {extraAccounts.map((acc) => (
                 <div key={acc.slot} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border border-[#d6e8ff] bg-white/50">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={`w-2 h-2 rounded-full shrink-0 ${acc.set ? "bg-green-400" : "bg-slate-300"}`} />
                     <div className="min-w-0">
                       <p className="text-xs font-mono text-slate-700 truncate">{acc.email ?? "(미설정)"}</p>
-                      <p className="text-[10px] text-slate-500">{acc.slot === "default" ? "기본 계정" : `슬롯 ${acc.slot} · ${acc.userKey}`}</p>
+                      <p className="text-[10px] text-slate-500">슬롯 {acc.slot}</p>
                     </div>
                   </div>
-                  {acc.slot !== "default" && acc.set && (
+                  {acc.set && (
                     <button
                       onClick={() => handleGmailDelete(acc.slot, acc.email)}
                       disabled={gmailSaving}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0">
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
+                    >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   )}
@@ -255,7 +414,7 @@ export default function SettingsPage() {
                     type="email"
                     value={addEmail}
                     onChange={(e) => setAddEmail(e.target.value)}
-                    placeholder="gongjudonghae@gmail.com"
+                    placeholder="example@gmail.com"
                     className="w-full rounded-lg border border-[#c8def8] bg-white/70 px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none"
                   />
                   <input
@@ -273,13 +432,15 @@ export default function SettingsPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => { setAddingSlot(null); setAddEmail(""); setAddToken(""); setGmailError(""); }}
-                      className="flex-1 py-2 rounded-lg border border-[#c8def8] text-xs text-slate-500 hover:text-slate-700 transition-colors">
+                      className="flex-1 py-2 rounded-lg border border-[#c8def8] text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                    >
                       취소
                     </button>
                     <button
                       onClick={() => handleGmailAdd(addingSlot)}
                       disabled={gmailSaving}
-                      className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-medium text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-1.5">
+                      className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-medium text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-1.5"
+                    >
                       {gmailSaving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />저장 중</> : "저장"}
                     </button>
                   </div>
@@ -295,25 +456,6 @@ export default function SettingsPage() {
           )}
         </div>
 
-        <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-lg bg-purple-400/10"><Globe className="w-5 h-5 text-purple-400" /></div>
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">배포 설정</h3>
-              <p className="text-xs text-slate-500">Cloudflare Pages</p>
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">대시보드 URL</label>
-            <input type="url" value={dashboardUrl} onChange={(e) => setDashboardUrl(e.target.value)} className="w-full rounded-xl border border-[#c8def8] bg-white/70 px-4 py-2.5 text-sm text-slate-700 focus:border-blue-500 focus:outline-none" />
-          </div>
-        </div>
-
-        {saveError && <p className="text-xs text-red-400">저장 실패: {saveError}</p>}
-
-        <button onClick={handleSave} disabled={saving || loadingCron} className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-medium text-white transition-colors disabled:opacity-60 flex items-center gap-2">
-          {saving ? <><Loader2 className="w-4 h-4 animate-spin" />저장 중...</> : saved ? <><CheckCircle className="w-4 h-4" />저장됨</> : <><Settings className="w-4 h-4" />설정 저장</>}
-        </button>
       </div>
     </div>
   );
