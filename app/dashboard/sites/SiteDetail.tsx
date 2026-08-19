@@ -610,13 +610,26 @@ export default function SiteDetail({ site }: { site: Site }) {
         XLSX.utils.sheet_add_aoa(monthlyWs, rows, { origin: "A10" });
       }
 
-      // 표지(Index) 시트: 리포트 제목과 기간을 선택한 월로 갱신
+      // 표지(Index) 시트: 리포트 제목과 기간을 선택한 월로, CLIENT/PROJECT/WRITER/APPROVAL은
+      // 사이트에 값이 입력된 경우에만 갱신(미입력 시 템플릿 원본 값 유지)
       const [y, m] = selectedMonth.split("-");
       const daysInMonth = new Date(Number(y), Number(m), 0).getDate();
       const indexWs = wb.Sheets["Index"];
       if (indexWs) {
         XLSX.utils.sheet_add_aoa(indexWs, [[`MET MAST MONTHLY REPORT (${y}.${m})`]], { origin: "A9" });
         XLSX.utils.sheet_add_aoa(indexWs, [[`${selectedMonth}-01 ~ ${selectedMonth}-${String(daysInMonth).padStart(2, "0")}`]], { origin: "E13" });
+        if (site.report_project_name) {
+          XLSX.utils.sheet_add_aoa(indexWs, [[site.report_project_name]], { origin: "E11" });
+        }
+        if (site.report_client) {
+          XLSX.utils.sheet_add_aoa(indexWs, [[site.report_client]], { origin: "E12" });
+        }
+        if (site.report_writer) {
+          XLSX.utils.sheet_add_aoa(indexWs, [[site.report_writer]], { origin: "E15" });
+        }
+        if (site.report_approval) {
+          XLSX.utils.sheet_add_aoa(indexWs, [[site.report_approval]], { origin: "E16" });
+        }
       }
 
       // Overview 시트: 사이트명/좌표/고도를 현재 사이트 정보로 갱신
@@ -642,7 +655,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       XLSX.utils.book_append_sheet(wb, ws, "Monthly");
       XLSX.writeFile(wb, `${site.site_number}_${selectedMonth}_Monthly_Report.xlsx`);
     }
-  }, [excelMonthlyTable, selectedMonth, site.site_number, site.name, site.latitude, site.longitude, site.elevation]);
+  }, [excelMonthlyTable, selectedMonth, site.site_number, site.name, site.latitude, site.longitude, site.elevation, site.report_project_name, site.report_client, site.report_writer, site.report_approval]);
 
   const monthRows = useMemo(
     () => dailyStats.filter((row) => row.date.startsWith(selectedMonth)),

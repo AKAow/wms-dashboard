@@ -13,6 +13,10 @@ export interface Site {
   sync_gmail_account: string | null;
   is_active: boolean;
   created_at: string;
+  report_client: string | null;
+  report_project_name: string | null;
+  report_writer: string | null;
+  report_approval: string | null;
 }
 
 export interface UserSiteAccess {
