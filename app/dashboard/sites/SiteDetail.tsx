@@ -109,16 +109,50 @@ const toKSTDateOnly = (timestamp: string) => {
 const toFixedOrDash = (value: number | null | undefined, digits = 2) =>
   typeof value === "number" ? value.toFixed(digits) : "-";
 
+// 마지막 값 하나만 보면 노이즈에 취약하므로 전반부/후반부 평균을 비교해 추세를 판정한다.
 const trendLabel = (points: number[]) => {
   if (points.length < 2) return { text: "— 동일", cls: "flat" as const };
-  const prev = points[points.length - 2];
-  const last = points[points.length - 1];
-  if (last > prev) return { text: "▲ 상승", cls: "up" as const };
-  if (last < prev) return { text: "▼ 하락", cls: "down" as const };
+  const mid = Math.floor(points.length / 2);
+  const firstHalf = points.slice(0, mid || 1);
+  const secondHalf = points.slice(mid || 1);
+  const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
+  const prev = avg(firstHalf);
+  const last = avg(secondHalf);
+  const threshold = Math.abs(prev) * 0.03; // 3% 미만 변화는 노이즈로 간주해 "동일" 처리
+  if (last > prev + threshold) return { text: "▲ 상승", cls: "up" as const };
+  if (last < prev - threshold) return { text: "▼ 하락", cls: "down" as const };
   return { text: "— 동일", cls: "flat" as const };
 };
 
 const toUTCDateOnly = (timestamp: string) => timestamp.slice(0, 10);
+
+// 최근 N개월로 그룹화 (전체 기간 스파크라인용)
+function groupByMonthRecent<T extends { date: string }>(rows: T[], n: number): T[][] {
+  const map = new Map<string, T[]>();
+  for (const r of rows) {
+    const key = r.date.slice(0, 7);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(r);
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-n)
+    .map(([, v]) => v);
+}
+
+// 2시간 단위 12구간으로 그룹화 (일별 스파크라인용)
+function groupByHourBucket<T extends { time: string }>(data: T[]): T[][] {
+  const map = new Map<number, T[]>();
+  for (const m of data) {
+    const hour = Number(m.time.split(":")[0]);
+    const bucket = Number.isFinite(hour) ? Math.floor(hour / 2) : 0;
+    if (!map.has(bucket)) map.set(bucket, []);
+    map.get(bucket)!.push(m);
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([, v]) => v);
+}
 
 function MiniSparkline({ points, color = "#2f80ed" }: { points: number[]; color?: string }) {
   if (!points.length) return <div className="h-7 w-[92px]" />;
@@ -610,10 +644,21 @@ export default function SiteDetail({ site }: { site: Site }) {
     return last ?? "-";
   }, [dailyStats]);
 
-  const sparkWind = useMemo(
-    () => monthRows.filter((r) => r.channel === "ch1").slice(-12).map((r) => r.avg_value ?? 0),
-    [monthRows],
-  );
+  const sparkWind = useMemo(() => {
+    if (overviewKpiPeriod === "day") {
+      return groupByHourBucket(dailyExcelData).map((bucket) => {
+        const vals = bucket.map((m) => m.ch1).filter((v): v is number => typeof v === "number");
+        return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+      });
+    }
+    if (overviewKpiPeriod === "all") {
+      return groupByMonthRecent(dailyStats.filter((r) => r.channel === "ch1"), 12).map((rows) => {
+        const vals = rows.map((r) => r.avg_value).filter((v): v is number => typeof v === "number");
+        return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+      });
+    }
+    return monthRows.filter((r) => r.channel === "ch1").slice(-12).map((r) => r.avg_value ?? 0);
+  }, [overviewKpiPeriod, dailyExcelData, dailyStats, monthRows]);
   const monthTurbulenceIntensity = useMemo(() => {
     const rows = monthRows.filter((r) => r.channel === "ch1" && typeof r.avg_value === "number" && typeof r.std_value === "number" && (r.avg_value as number) > 0);
     if (!rows.length) return null;
@@ -672,14 +717,45 @@ export default function SiteDetail({ site }: { site: Site }) {
     return Math.sqrt(-2 * Math.log(R)) * (180 / Math.PI);
   }, [monthRows]);
 
-  const sparkTI = useMemo(
-    () => monthRows
+  const sparkTI = useMemo(() => {
+    if (overviewKpiPeriod === "day") {
+      return groupByHourBucket(dailyExcelData).map((bucket) => {
+        const vals = bucket.map((m) => m.ch1).filter((v): v is number => typeof v === "number");
+        if (vals.length < 2) return 0;
+        const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+        if (mean <= 0) return 0;
+        const variance = vals.reduce((sum, v) => sum + (v - mean) ** 2, 0) / vals.length;
+        return Math.max(0, Math.min(100, (Math.sqrt(variance) / mean) * 100));
+      });
+    }
+    if (overviewKpiPeriod === "all") {
+      return groupByMonthRecent(
+        dailyStats.filter((r) => r.channel === "ch1" && typeof r.avg_value === "number" && typeof r.std_value === "number" && (r.avg_value as number) > 0),
+        12,
+      ).map((rows) => {
+        const tis = rows.map((r) => ((r.std_value as number) / (r.avg_value as number)) * 100);
+        return tis.length ? Math.max(0, Math.min(100, tis.reduce((a, b) => a + b, 0) / tis.length)) : 0;
+      });
+    }
+    return monthRows
       .filter((r) => r.channel === "ch1" && typeof r.avg_value === "number" && typeof r.std_value === "number" && (r.avg_value as number) > 0)
       .slice(-12)
-      .map((r) => ((r.std_value as number) / (r.avg_value as number)) * 100),
-    [monthRows],
-  );
+      .map((r) => ((r.std_value as number) / (r.avg_value as number)) * 100);
+  }, [overviewKpiPeriod, dailyExcelData, dailyStats, monthRows]);
+
   const sparkMaxGust = useMemo(() => {
+    if (overviewKpiPeriod === "day") {
+      return groupByHourBucket(dailyExcelData).map((bucket) => {
+        const vals = bucket.flatMap((m) => WIND_SPEED_NORTH_CHANNELS.map((ch) => m[ch]).filter((v): v is number => typeof v === "number"));
+        return vals.length ? Math.max(...vals) : 0;
+      });
+    }
+    if (overviewKpiPeriod === "all") {
+      return groupByMonthRecent(
+        dailyStats.filter((r) => (WIND_SPEED_NORTH_CHANNELS as readonly string[]).includes(r.channel) && typeof r.max_value === "number"),
+        12,
+      ).map((rows) => (rows.length ? Math.max(...rows.map((r) => r.max_value as number)) : 0));
+    }
     const byDate = new Map<string, number>();
     for (const r of monthRows) {
       if (!(WIND_SPEED_NORTH_CHANNELS as readonly string[]).includes(r.channel)) continue;
@@ -691,30 +767,42 @@ export default function SiteDetail({ site }: { site: Site }) {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .slice(-12)
       .map(([, v]) => v);
-  }, [monthRows]);
-  const sparkDirVar = useMemo(
-    () => {
-      const byDate = new Map<string, number[]>();
-      for (const r of monthRows) {
-        if (!["ch13", "ch14", "ch15", "ch16"].includes(r.channel)) continue;
-        if (typeof r.avg_value !== "number") continue;
-        if (!byDate.has(r.date)) byDate.set(r.date, []);
-        byDate.get(r.date)!.push((r.avg_value as number) * Math.PI / 180);
-      }
+  }, [overviewKpiPeriod, dailyExcelData, dailyStats, monthRows]);
 
-      return Array.from(byDate.entries())
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .slice(-12)
-        .map(([, angles]) => {
-          const c = angles.reduce((a, x) => a + Math.cos(x), 0) / angles.length;
-          const s = angles.reduce((a, x) => a + Math.sin(x), 0) / angles.length;
-          const R = Math.sqrt(c * c + s * s);
-          if (R <= 0) return 0;
-          return Math.sqrt(-2 * Math.log(R)) * (180 / Math.PI);
-        });
-    },
-    [monthRows],
-  );
+  const sparkDirVar = useMemo(() => {
+    const circularSdDeg = (angles: number[]) => {
+      if (!angles.length) return 0;
+      const c = angles.reduce((a, x) => a + Math.cos(x), 0) / angles.length;
+      const s = angles.reduce((a, x) => a + Math.sin(x), 0) / angles.length;
+      const R = Math.sqrt(c * c + s * s);
+      return R > 0 ? Math.sqrt(-2 * Math.log(R)) * (180 / Math.PI) : 0;
+    };
+    if (overviewKpiPeriod === "day") {
+      return groupByHourBucket(dailyExcelData).map((bucket) => {
+        const angles = bucket
+          .flatMap((m) => (["ch13", "ch14", "ch15", "ch16"] as const).map((ch) => m[ch]).filter((v): v is number => typeof v === "number"))
+          .map((v) => (v * Math.PI) / 180);
+        return circularSdDeg(angles);
+      });
+    }
+    if (overviewKpiPeriod === "all") {
+      return groupByMonthRecent(
+        dailyStats.filter((r) => ["ch13", "ch14", "ch15", "ch16"].includes(r.channel) && typeof r.avg_value === "number"),
+        12,
+      ).map((rows) => circularSdDeg(rows.map((r) => ((r.avg_value as number) * Math.PI) / 180)));
+    }
+    const byDate = new Map<string, number[]>();
+    for (const r of monthRows) {
+      if (!["ch13", "ch14", "ch15", "ch16"].includes(r.channel)) continue;
+      if (typeof r.avg_value !== "number") continue;
+      if (!byDate.has(r.date)) byDate.set(r.date, []);
+      byDate.get(r.date)!.push((r.avg_value as number) * Math.PI / 180);
+    }
+    return Array.from(byDate.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-12)
+      .map(([, angles]) => circularSdDeg(angles));
+  }, [overviewKpiPeriod, dailyExcelData, dailyStats, monthRows]);
 
   const windTrend = useMemo(() => trendLabel(sparkWind), [sparkWind]);
   const tiTrend = useMemo(() => trendLabel(sparkTI), [sparkTI]);
@@ -1464,7 +1552,14 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
             <div className="kpi-card">
               <div className="k-icon"><MapPin size={16} /></div>
-              <div className="k-label">풍향 변동성</div>
+              <div
+                className="k-label"
+                title={overviewKpiPeriod === "day"
+                  ? "선택 날짜의 10분 단위 풍향값들이 하루 안에서 흩어진 정도(원형표준편차)입니다."
+                  : "기간 내 날짜별 일평균 풍향이 날짜 간에 흩어진 정도(원형표준편차)입니다. 일별 모드의 '일중 변동성'과는 다른 지표입니다."}
+              >
+                풍향 변동성 {overviewKpiPeriod === "day" ? "(일중)" : "(일간)"}
+              </div>
               <div className="k-num">{toFixedOrDash(activeDirVar, 1)}<span className="u">°</span></div>
               <div className="k-foot"><span className={`k-delta ${dirTrend.cls}`}>{dirTrend.text}</span><MiniSparkline points={sparkDirVar} color="#ef4444" /></div>
             </div>
