@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { MapPin, Activity, Wind, Navigation, BarChart2, Table2, CalendarDays, Search, Bell, Download } from "lucide-react";
+import { MapPin, Activity, Wind, Navigation, BarChart2, Table2, CalendarDays, Search, Bell, Download, Loader2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import * as XLSX from "xlsx";
 import type { Site, DailyStat, Measurement } from "@/lib/types";
@@ -284,6 +284,18 @@ export default function SiteDetail({ site }: { site: Site }) {
   const dateInputRef = useRef<HTMLInputElement>(null);
   const monthInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
+  // 월간 리포트 CLIENT/PROJECT/WRITER/APPROVAL — 사이트에 저장된 값을 기본으로 쓰되,
+  // 다운로드 시점에 모달에서 수정 가능. site prop은 읽기전용이라 로컬에 override 보관.
+  const [siteReportMeta, setSiteReportMeta] = useState({
+    client: site.report_client ?? "",
+    projectName: site.report_project_name ?? "",
+    writer: site.report_writer ?? "",
+    approval: site.report_approval ?? "",
+  });
+  const [reportMetaModalOpen, setReportMetaModalOpen] = useState(false);
+  const [reportMetaForm, setReportMetaForm] = useState(siteReportMeta);
+  const [reportMetaSaving, setReportMetaSaving] = useState(false);
+  const [reportMetaError, setReportMetaError] = useState("");
   // 8채널 동시 표시 차트 접근성: 기본은 Shadow 센서(ch4/6/8) 숨김, 범례 클릭으로 토글
   const [hiddenChannels, setHiddenChannels] = useState<Set<string>>(new Set(["ch4", "ch6", "ch8"]));
   const toggleChannel = useCallback((ch: string) => {
@@ -562,7 +574,8 @@ export default function SiteDetail({ site }: { site: Site }) {
     return { dayLabels, rows };
   }, [selectedMonthStats, selectedMonth]);
 
-  const downloadMonthlyExcel = useCallback(async () => {
+  const downloadMonthlyExcel = useCallback(async (overrideMeta?: typeof siteReportMeta) => {
+    const meta = overrideMeta ?? siteReportMeta;
     const templatePath = "/reports/202603_Wando_Daesin_Monthly_Report_260403.xlsx";
 
     const fixed31DayLabels = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"));
@@ -618,17 +631,17 @@ export default function SiteDetail({ site }: { site: Site }) {
       if (indexWs) {
         XLSX.utils.sheet_add_aoa(indexWs, [[`MET MAST MONTHLY REPORT (${y}.${m})`]], { origin: "A9" });
         XLSX.utils.sheet_add_aoa(indexWs, [[`${selectedMonth}-01 ~ ${selectedMonth}-${String(daysInMonth).padStart(2, "0")}`]], { origin: "E13" });
-        if (site.report_project_name) {
-          XLSX.utils.sheet_add_aoa(indexWs, [[site.report_project_name]], { origin: "E11" });
+        if (meta.projectName) {
+          XLSX.utils.sheet_add_aoa(indexWs, [[meta.projectName]], { origin: "E11" });
         }
-        if (site.report_client) {
-          XLSX.utils.sheet_add_aoa(indexWs, [[site.report_client]], { origin: "E12" });
+        if (meta.client) {
+          XLSX.utils.sheet_add_aoa(indexWs, [[meta.client]], { origin: "E12" });
         }
-        if (site.report_writer) {
-          XLSX.utils.sheet_add_aoa(indexWs, [[site.report_writer]], { origin: "E15" });
+        if (meta.writer) {
+          XLSX.utils.sheet_add_aoa(indexWs, [[meta.writer]], { origin: "E15" });
         }
-        if (site.report_approval) {
-          XLSX.utils.sheet_add_aoa(indexWs, [[site.report_approval]], { origin: "E16" });
+        if (meta.approval) {
+          XLSX.utils.sheet_add_aoa(indexWs, [[meta.approval]], { origin: "E16" });
         }
       }
 
@@ -655,7 +668,39 @@ export default function SiteDetail({ site }: { site: Site }) {
       XLSX.utils.book_append_sheet(wb, ws, "Monthly");
       XLSX.writeFile(wb, `${site.site_number}_${selectedMonth}_Monthly_Report.xlsx`);
     }
-  }, [excelMonthlyTable, selectedMonth, site.site_number, site.name, site.latitude, site.longitude, site.elevation, site.report_project_name, site.report_client, site.report_writer, site.report_approval]);
+  }, [excelMonthlyTable, selectedMonth, site.site_number, site.name, site.latitude, site.longitude, site.elevation, siteReportMeta]);
+
+  const openReportMetaModal = useCallback(() => {
+    setReportMetaForm(siteReportMeta);
+    setReportMetaError("");
+    setReportMetaModalOpen(true);
+  }, [siteReportMeta]);
+
+  const handleReportMetaSaveAndDownload = useCallback(async () => {
+    setReportMetaSaving(true);
+    setReportMetaError("");
+    try {
+      const { error } = await supabase
+        .from("sites")
+        .update({
+          report_client: reportMetaForm.client.trim() || null,
+          report_project_name: reportMetaForm.projectName.trim() || null,
+          report_writer: reportMetaForm.writer.trim() || null,
+          report_approval: reportMetaForm.approval.trim() || null,
+        })
+        .eq("id", site.id);
+      if (error) throw new Error(error.message);
+      setSiteReportMeta(reportMetaForm);
+      setReportMetaModalOpen(false);
+      // siteReportMeta state 갱신은 다음 렌더에 반영되므로, 방금 저장한 값을
+      // 인자로 직접 넘겨 downloadMonthlyExcel이 최신 값을 쓰도록 한다.
+      await downloadMonthlyExcel(reportMetaForm);
+    } catch (e) {
+      setReportMetaError(e instanceof Error ? e.message : "저장 실패");
+    } finally {
+      setReportMetaSaving(false);
+    }
+  }, [reportMetaForm, site.id, supabase, downloadMonthlyExcel]);
 
   const monthRows = useMemo(
     () => dailyStats.filter((row) => row.date.startsWith(selectedMonth)),
@@ -1523,7 +1568,7 @@ export default function SiteDetail({ site }: { site: Site }) {
           <div className="sub">{site.location_name ?? "위치 미입력"} · 최근 동기화 {latestDataDate}</div>
         </div>
         <div className="actions">
-          <button onClick={downloadMonthlyExcel} className="btn btn-primary"><Download size={15} />월간 리포트 다운로드</button>
+          <button onClick={openReportMetaModal} className="btn btn-primary"><Download size={15} />월간 리포트 다운로드</button>
         </div>
       </div>
 
@@ -1927,7 +1972,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
             <button
               type="button"
-              onClick={downloadMonthlyExcel}
+              onClick={openReportMetaModal}
               className="rounded-xl border border-blue-500/40 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-500/20"
             >
               고객사 엑셀 다운로드
@@ -2357,6 +2402,76 @@ export default function SiteDetail({ site }: { site: Site }) {
           </div>
 
           <p className="text-[11px] text-amber-700">※ 시뮬레이션 값은 사업성 검토 참고용이며 발전량 보증값이 아닙니다.</p>
+        </div>
+      )}
+
+      {reportMetaModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !reportMetaSaving && setReportMetaModalOpen(false)}>
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">리포트 정보 확인</h3>
+            <p className="text-xs text-slate-500 mb-4">엑셀 표지에 들어갈 정보입니다. 한 번 입력하면 사이트에 저장되어 다음부터 자동으로 채워집니다.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Project Name</label>
+                <input
+                  type="text"
+                  value={reportMetaForm.projectName}
+                  onChange={(e) => setReportMetaForm((f) => ({ ...f, projectName: e.target.value }))}
+                  placeholder="예: DAESIN-RI METEOROLOGICAL MAST INSTALLATION PROJECT"
+                  className="w-full rounded-lg border border-[#c8def8] bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Client</label>
+                <input
+                  type="text"
+                  value={reportMetaForm.client}
+                  onChange={(e) => setReportMetaForm((f) => ({ ...f, client: e.target.value }))}
+                  placeholder="예: SCPower Co., Ltd"
+                  className="w-full rounded-lg border border-[#c8def8] bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Writer</label>
+                  <input
+                    type="text"
+                    value={reportMetaForm.writer}
+                    onChange={(e) => setReportMetaForm((f) => ({ ...f, writer: e.target.value }))}
+                    className="w-full rounded-lg border border-[#c8def8] bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Approval</label>
+                  <input
+                    type="text"
+                    value={reportMetaForm.approval}
+                    onChange={(e) => setReportMetaForm((f) => ({ ...f, approval: e.target.value }))}
+                    className="w-full rounded-lg border border-[#c8def8] bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+            {reportMetaError && <p className="text-xs text-red-500 mt-2">{reportMetaError}</p>}
+            <div className="flex gap-2 mt-5">
+              <button
+                type="button"
+                onClick={() => setReportMetaModalOpen(false)}
+                disabled={reportMetaSaving}
+                className="flex-1 py-2 rounded-lg border border-[#c8def8] text-sm text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-60"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleReportMetaSaveAndDownload}
+                disabled={reportMetaSaving}
+                className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-medium text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-1.5"
+              >
+                {reportMetaSaving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />저장 중</> : <><Download className="w-3.5 h-3.5" />저장 후 다운로드</>}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
