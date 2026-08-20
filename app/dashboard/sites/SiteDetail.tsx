@@ -1789,7 +1789,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
           </div>
 
-          <div className="grid">
+          <div className="legacy-grid">
             <div className="panel">
               <div className="panel-head">
                 <div>
