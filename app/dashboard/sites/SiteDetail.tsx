@@ -2229,6 +2229,80 @@ export default function SiteDetail({ site }: { site: Site }) {
           </div>
           <p className="text-xs text-slate-600">연식 기반 손실률과 적용 구간을 선택해 P50/P75/P90 추정치를 계산합니다.</p>
 
+          {/* ── [입력] 시뮬레이션 조건 설정 ── */}
+          <div className="rounded-lg border-2 border-slate-300 bg-slate-50 p-3">
+            <div className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1.5">
+              <span aria-hidden>⚙</span> 시뮬레이션 조건 설정 <span className="font-normal text-slate-400">— 아래 결과는 이 설정을 따릅니다</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-2.5">
+                <div className="text-slate-500 text-xs mb-2">터빈 설정</div>
+                <div className="space-y-2 text-sm">
+                  <label className="space-y-1 block">
+                    <span className="text-[11px] tracking-wide text-slate-500 inline-flex items-center gap-2 whitespace-nowrap">터빈 연식 구간 <b className="text-slate-700">손실률 {Math.round(simulationSummary.loss * 100)}%</b></span>
+                    <select value={turbineAgeBand} onChange={(e) => setTurbineAgeBand(e.target.value as "0-5" | "6-10" | "11-15" | "16+")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
+                      <option value="0-5">0~5년 (12%)</option>
+                      <option value="6-10">6~10년 (15%)</option>
+                      <option value="11-15">11~15년 (18%)</option>
+                      <option value="16+">16년 이상 (22%)</option>
+                    </select>
+                  </label>
+                  <label className="space-y-1 block">
+                    <span className="text-[11px] tracking-wide text-slate-500">터빈 시나리오</span>
+                    <select value={selectedScenarioKey} onChange={(e) => { setSelectedScenarioKey(e.target.value); const sc = allScenarios.find((s) => s.key === e.target.value); if (sc) setTurbineMw(sc.ratedMw); }} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
+                      <optgroup label="내장 기종">
+                        {STANDARD_TURBINE_SCENARIOS.map((s) => (
+                          <option key={s.key} value={s.key}>{s.name} · {s.ratedMw.toFixed(1)}MW</option>
+                        ))}
+                      </optgroup>
+                      {dbTurbineCurves.length > 0 && (
+                        <optgroup label="커스텀 커브 (DB)">
+                          {dbTurbineCurves.map((s) => (
+                            <option key={s.key} value={s.key}>{s.name} · {s.ratedMw.toFixed(1)}MW{s.notes ? ` (${s.notes})` : ""}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-2.5">
+                <div className="text-slate-500 text-xs mb-2">기간/표시 설정</div>
+                <div className="space-y-2 text-sm">
+                  <label className="space-y-1 block">
+                    <span className="text-[11px] tracking-wide text-slate-500">표시기준</span>
+                    <select value={simPeriod} onChange={(e) => setSimPeriod(e.target.value as "daily" | "weekly" | "monthly")} className="w-full h-9 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800">
+                      <option value="daily">일별</option>
+                      <option value="weekly">주별</option>
+                      <option value="monthly">월별</option>
+                    </select>
+                  </label>
+                  <label className="space-y-1 block">
+                    <span className="text-[11px] tracking-wide text-slate-500">적용기간</span>
+                    <select value={simPreset} onChange={(e) => setSimPreset(e.target.value as "3M" | "6M" | "12M" | "custom")} className="w-full h-9 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800">
+                      <option value="3M">3M</option>
+                      <option value="6M">6M</option>
+                      <option value="12M">12M</option>
+                      <option value="custom">커스텀</option>
+                    </select>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="space-y-1 block">
+                      <span className="text-[11px] tracking-wide text-slate-500">시작</span>
+                      <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.start} onChange={(e) => setSimStartDate(e.target.value)} className="w-full h-9 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
+                    </label>
+                    <label className="space-y-1 block">
+                      <span className="text-[11px] tracking-wide text-slate-500">종료</span>
+                      <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.end} onChange={(e) => setSimEndDate(e.target.value)} className="w-full h-9 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── [출력] 한 줄 결론 ── */}
           <div className="rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3.5">
             <div className="text-[11px] tracking-wide text-blue-700 mb-1.5">한 줄 결론</div>
             <div className="flex flex-wrap items-center gap-2 mb-1.5">
@@ -2238,88 +2312,30 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
             <div className="text-[13px] leading-6 tracking-[0.01em] text-slate-900 font-medium">{simulationConclusion}</div>
             <div className="mt-1 text-[12px] leading-5 text-slate-700">{simulationAdvice.summary}</div>
+            <div className="mt-1.5 text-[11px] text-amber-700">※ 참고용 추정치이며 발전량 보증값이 아닙니다.</div>
           </div>
 
-          <div className="overflow-x-auto">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            <div className="min-w-0 rounded-lg border border-[#d6e8ff] bg-white/70 p-2.5">
-              <div className="text-slate-500 text-xs mb-2">핵심 지표</div>
-              <div className="space-y-2 text-xs">
-                <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2"><div className="text-slate-500 tracking-wide">신뢰도 등급</div><div className="font-semibold text-slate-900 mt-0.5">{metMastQuality.grade}</div></div>
-                <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2"><div className="text-slate-500 tracking-wide">누적 P50</div><div className="font-semibold text-slate-900 mt-0.5">{toFixedOrDash(simulationSummary.totalP50, 1)} MWh</div></div>
-                <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2"><div className="text-slate-500 tracking-wide">P90/P50</div><div className="font-semibold text-slate-900 mt-0.5">{toFixedOrDash(simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0, 2)}</div></div>
-                <div className="rounded-md border border-[#d6e8ff] bg-white px-3 py-2"><div className="text-slate-500 tracking-wide">기간 커버리지</div><div className="font-semibold text-slate-900 mt-0.5">{simCoverage}%</div></div>
-              </div>
-            </div>
-
-            <div className="min-w-0 rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-2.5">
-              <div className="text-slate-500 text-xs mb-2">터빈 설정</div>
-              <div className="space-y-2 text-sm">
-                <label className="space-y-1 block">
-                  <span className="text-[11px] tracking-wide text-slate-500 inline-flex items-center gap-2 whitespace-nowrap">터빈 연식 구간 <b className="text-slate-700">손실률 {Math.round(simulationSummary.loss * 100)}%</b></span>
-                  <select value={turbineAgeBand} onChange={(e) => setTurbineAgeBand(e.target.value as "0-5" | "6-10" | "11-15" | "16+")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
-                    <option value="0-5">0~5년 (12%)</option>
-                    <option value="6-10">6~10년 (15%)</option>
-                    <option value="11-15">11~15년 (18%)</option>
-                    <option value="16+">16년 이상 (22%)</option>
-                  </select>
-                </label>
-                <label className="space-y-1 block">
-                  <span className="text-[11px] tracking-wide text-slate-500">터빈 시나리오</span>
-                  <select value={selectedScenarioKey} onChange={(e) => { setSelectedScenarioKey(e.target.value); const sc = allScenarios.find((s) => s.key === e.target.value); if (sc) setTurbineMw(sc.ratedMw); }} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
-                    <optgroup label="내장 기종">
-                      {STANDARD_TURBINE_SCENARIOS.map((s) => (
-                        <option key={s.key} value={s.key}>{s.name} · {s.ratedMw.toFixed(1)}MW</option>
-                      ))}
-                    </optgroup>
-                    {dbTurbineCurves.length > 0 && (
-                      <optgroup label="커스텀 커브 (DB)">
-                        {dbTurbineCurves.map((s) => (
-                          <option key={s.key} value={s.key}>{s.name} · {s.ratedMw.toFixed(1)}MW{s.notes ? ` (${s.notes})` : ""}</option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </select>
-                </label>
-              </div>
-            </div>
-
-            <div className="min-w-0 rounded-lg border border-[#d6e8ff] bg-white/60 p-2.5">
-              <div className="text-slate-500 text-xs mb-2">기간/표시 설정</div>
-              <div className="space-y-2 text-sm">
-                <label className="space-y-1 block">
-                  <span className="text-[11px] tracking-wide text-slate-500">표시기준</span>
-                  <select value={simPeriod} onChange={(e) => setSimPeriod(e.target.value as "daily" | "weekly" | "monthly")} className="w-full h-9 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800">
-                    <option value="daily">일별</option>
-                    <option value="weekly">주별</option>
-                    <option value="monthly">월별</option>
-                  </select>
-                </label>
-                <label className="space-y-1 block">
-                  <span className="text-[11px] tracking-wide text-slate-500">적용기간</span>
-                  <select value={simPreset} onChange={(e) => setSimPreset(e.target.value as "3M" | "6M" | "12M" | "custom")} className="w-full h-9 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800">
-                    <option value="3M">3M</option>
-                    <option value="6M">6M</option>
-                    <option value="12M">12M</option>
-                    <option value="custom">커스텀</option>
-                  </select>
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="space-y-1 block">
-                    <span className="text-[11px] tracking-wide text-slate-500">시작</span>
-                    <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.start} onChange={(e) => setSimStartDate(e.target.value)} className="w-full h-9 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
-                  </label>
-                  <label className="space-y-1 block">
-                    <span className="text-[11px] tracking-wide text-slate-500">종료</span>
-                    <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.end} onChange={(e) => setSimEndDate(e.target.value)} className="w-full h-9 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
-                  </label>
-                </div>
-              </div>
-            </div>
+          {/* ── [출력] 핵심 지표 (위 설정 기준 계산 결과, 중복 노출 없이 한 곳에 통합) ── */}
+          <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3">
+            <div className="text-slate-500 text-xs mb-2">핵심 지표 <span className="text-slate-400 font-normal">— 계산 결과</span></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <table className="w-full">
+                <tbody>
+                  <tr><td className="py-1 text-slate-600">P50</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP50, 1)} MWh <span className="text-slate-400 font-normal">(구간평균 {toFixedOrDash(simulationSummary.avgP50, 1)})</span></td></tr>
+                  <tr><td className="py-1 text-slate-600">P75</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP75, 1)} MWh <span className="text-slate-400 font-normal">(구간평균 {toFixedOrDash(simulationSummary.avgP75, 1)})</span></td></tr>
+                  <tr><td className="py-1 text-slate-600">P90</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP90, 1)} MWh <span className="text-slate-400 font-normal">(구간평균 {toFixedOrDash(simulationSummary.avgP90, 1)})</span></td></tr>
+                </tbody>
+              </table>
+              <table className="w-full">
+                <tbody>
+                  <tr><td className="py-1 text-slate-600">평균 풍속</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.avgWind, 2)} m/s</td></tr>
+                  <tr><td className="py-1 text-slate-600">P90/P50</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0, 2)}</td></tr>
+                  <tr><td className="py-1 text-slate-600">신뢰도 등급</td><td className="py-1 text-right font-semibold text-slate-900">{metMastQuality.grade}</td></tr>
+                  <tr><td className="py-1 text-slate-600">기간 커버리지</td><td className="py-1 text-right font-semibold text-slate-900">{simCoverage}%</td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
-
-          
 
           {/* ── AEP 연간 발전량 추정 ── */}
           <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
@@ -2367,7 +2383,7 @@ export default function SiteDetail({ site }: { site: Site }) {
           </div>
 
           <details className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-700">
-            <summary className="cursor-pointer font-semibold text-slate-900">근거 상세 보기</summary>
+            <summary className="cursor-pointer font-semibold text-slate-900">근거 상세 보기 — MCP-lite 보정 · 불확실성 분해 · 계산 메타정보</summary>
             <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
               <div
                 className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5"
@@ -2381,35 +2397,7 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
           </details>
 
-          
 
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div className="rounded-lg border border-[#d6e8ff] bg-blue-50/50 p-3">
-              <div className="text-slate-500 text-xs mb-2">누적 추정값</div>
-              <table className="w-full text-xs">
-                <tbody>
-                  <tr><td className="py-1 text-slate-600">P50</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP50, 1)} MWh</td></tr>
-                  <tr><td className="py-1 text-slate-600">P75</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP75, 1)} MWh</td></tr>
-                  <tr><td className="py-1 text-slate-600">P90</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP90, 1)} MWh</td></tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div className="rounded-lg border border-[#d6e8ff] bg-white/60 p-3">
-              <div className="text-slate-500 text-xs mb-2">기준 평균값</div>
-              <table className="w-full text-xs">
-                <tbody>
-                  <tr><td className="py-1 text-slate-600">평균 풍속</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.avgWind, 2)} m/s</td></tr>
-                  <tr><td className="py-1 text-slate-600">평균 P50</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.avgP50, 1)} MWh</td></tr>
-                  <tr><td className="py-1 text-slate-600">평균 P75</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.avgP75, 1)} MWh</td></tr>
-                  <tr><td className="py-1 text-slate-600">평균 P90</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.avgP90, 1)} MWh</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          
 
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={simulationRows}>
