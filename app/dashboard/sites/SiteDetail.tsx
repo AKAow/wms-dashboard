@@ -2232,7 +2232,7 @@ export default function SiteDetail({ site }: { site: Site }) {
       )}
 
       {tab === "simulation" && (
-        <div className="space-y-8">
+        <div className="space-y-8 rounded-2xl bg-white p-6 md:p-8 shadow-sm shadow-slate-200/60">
           {/* Header */}
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -2367,7 +2367,7 @@ export default function SiteDetail({ site }: { site: Site }) {
               </div>
               <div className="px-5 py-4">
                 <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">설비이용률 (CF)</div>
-                <div className="text-3xl font-bold text-blue-600">{simCapacityFactor != null ? (simCapacityFactor * 100).toFixed(1) : "-"}<span className="text-sm font-normal text-slate-400 ml-1">%</span></div>
+                <div className="text-3xl font-bold text-slate-900">{simCapacityFactor != null ? (simCapacityFactor * 100).toFixed(1) : "-"}<span className="text-sm font-normal text-slate-400 ml-1">%</span></div>
               </div>
             </div>
             <p className="text-[11px] text-slate-400 mt-1.5">적용기간({effectiveSimDates.start} ~ {effectiveSimDates.end}) 누적 기준</p>
@@ -2511,7 +2511,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                       </div>
                       <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2.5">
                         <div className="text-[11px] text-slate-500 mb-0.5">설비이용률 (CF)</div>
-                        <div className="text-lg font-bold text-blue-700">{(aepEstimate.cf * 100).toFixed(1)} <span className="text-xs font-normal">%</span></div>
+                        <div className="text-lg font-bold text-slate-700">{(aepEstimate.cf * 100).toFixed(1)} <span className="text-xs font-normal">%</span></div>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-600">
