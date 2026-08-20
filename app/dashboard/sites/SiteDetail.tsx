@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { MapPin, Activity, Wind, Navigation, BarChart2, Table2, CalendarDays, Search, Bell, Download, Loader2, Settings, AlertTriangle, Gauge } from "lucide-react";
+import { MapPin, Activity, Wind, Navigation, BarChart2, Table2, CalendarDays, Search, Bell, Download, Loader2, AlertTriangle } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import * as XLSX from "xlsx";
 import type { Site, DailyStat, Measurement } from "@/lib/types";
@@ -1398,6 +1398,13 @@ export default function SiteDetail({ site }: { site: Site }) {
     return { totalP50, totalP75, totalP90, avgWind, avgP50, avgP75, avgP90, loss: AGE_LOSS_MAP[turbineAgeBand] };
   }, [simulationDailyRows, simulationRows, turbineAgeBand]);
 
+  // 적용기간 기준 설비이용률(CF) = 누적 P50 발전량 / (정격출력 × 관측시간)
+  const simCapacityFactor = useMemo(() => {
+    const hours = simulationDailyRows.length * 24;
+    if (hours <= 0 || selectedScenario.ratedMw <= 0) return null;
+    return simulationSummary.totalP50 / (selectedScenario.ratedMw * hours);
+  }, [simulationDailyRows.length, selectedScenario.ratedMw, simulationSummary.totalP50]);
+
   // 시뮬레이션 적용기간(effectiveSimDates) 기준 데이터 커버리지.
   // monthCoverage(Overview/월별 탭에서 선택된 단일 달)를 그대로 쓰면 시뮬레이션
   // 기간(3M/6M/12M/custom)과 완전히 무관한 값으로 신뢰도가 매겨지는 문제가 있었음.
@@ -2225,292 +2232,299 @@ export default function SiteDetail({ site }: { site: Site }) {
       )}
 
       {tab === "simulation" && (
-        <div className="rounded-xl border border-[#d6e8ff] bg-white/70 backdrop-blur-xl p-5 space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-slate-900">사업성 시뮬레이션</h3>
+        <div className="space-y-8">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">사업성 시뮬레이션</h3>
+              <p className="text-xs text-slate-500 mt-0.5">연식 기반 손실률과 적용 구간을 선택해 P50/P75/P90 추정치를 계산합니다.</p>
+            </div>
             <button
               type="button"
               onClick={downloadPreFeasibilityReport}
-              className="rounded-lg border border-blue-500/40 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-500/20"
+              className="shrink-0 rounded-lg bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 text-sm font-medium flex items-center gap-1.5"
             >
-              사전타당성 리포트 다운로드
+              <Download className="w-4 h-4" />사전타당성 리포트
             </button>
           </div>
-          <p className="text-xs text-slate-600">연식 기반 손실률과 적용 구간을 선택해 P50/P75/P90 추정치를 계산합니다.</p>
 
-          {/* ── [입력] 시뮬레이션 조건 설정 ── */}
-          <div className="rounded-lg border border-blue-300 bg-blue-50/40 p-3">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="text-xs font-semibold text-blue-800 flex items-center gap-1.5">
-                <Settings className="w-3.5 h-3.5 text-blue-500" /> 시뮬레이션 조건 설정 <span className="font-normal text-slate-400">— 아래 결과는 이 설정을 따릅니다</span>
-              </div>
-              <button
-                type="button"
-                onClick={resetSimulationSettings}
-                className="shrink-0 text-[11px] text-blue-600 hover:text-blue-800 underline underline-offset-2"
-              >
-                기본값으로 초기화
-              </button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div className="min-w-0 rounded-lg border border-[#d6e8ff] bg-white p-2.5">
-                <div className="text-slate-500 text-xs mb-2 flex items-center gap-1.5"><Wind className="w-3.5 h-3.5 text-blue-400" />터빈 설정</div>
-                <div className="space-y-2 text-sm">
-                  <label className="space-y-1 block">
-                    <span className="text-[11px] tracking-wide text-slate-500 inline-flex items-center gap-2 whitespace-nowrap">터빈 연식 구간 <b className="text-slate-700">손실률 {Math.round(simulationSummary.loss * 100)}%</b></span>
-                    <select value={turbineAgeBand} onChange={(e) => setTurbineAgeBand(e.target.value as "0-5" | "6-10" | "11-15" | "16+")} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
-                      <option value="0-5">0~5년 (12%)</option>
-                      <option value="6-10">6~10년 (15%)</option>
-                      <option value="11-15">11~15년 (18%)</option>
-                      <option value="16+">16년 이상 (22%)</option>
-                    </select>
-                  </label>
-                  <label className="space-y-1 block">
-                    <span className="text-[11px] tracking-wide text-slate-500">터빈 시나리오</span>
-                    <select value={selectedScenarioKey} onChange={(e) => { setSelectedScenarioKey(e.target.value); const sc = allScenarios.find((s) => s.key === e.target.value); if (sc) setTurbineMw(sc.ratedMw); }} className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800">
-                      <optgroup label="내장 기종">
-                        {STANDARD_TURBINE_SCENARIOS.map((s) => (
-                          <option key={s.key} value={s.key}>{s.name} · {s.ratedMw.toFixed(1)}MW</option>
-                        ))}
-                      </optgroup>
-                      {dbTurbineCurves.length > 0 && (
-                        <optgroup label="커스텀 커브 (DB)">
-                          {dbTurbineCurves.map((s) => (
-                            <option key={s.key} value={s.key}>{s.name} · {s.ratedMw.toFixed(1)}MW{s.notes ? ` (${s.notes})` : ""}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
-                  </label>
-                  <label className="space-y-1 block">
-                    <span className="text-[11px] tracking-wide text-slate-500">검토 중인 터빈 용량 직접 입력 (MW)</span>
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0.1"
-                        value={turbineMw}
-                        onChange={(e) => setTurbineMw(Number(e.target.value))}
-                        className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setSelectedScenarioKey(getNearestScenarioByMw(turbineMw).key)}
-                        className="shrink-0 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
-                        title="내장 기종 중 입력한 MW와 가장 가까운 시나리오를 자동 선택합니다"
-                      >
-                        가까운 기종 매칭
-                      </button>
-                    </div>
-                  </label>
-                </div>
-              </div>
+          {/* Simulation Control Bar — 컴팩트 1줄, 조건 설정이 화면 주인공이 되지 않도록 */}
+          <div className="flex flex-wrap items-end gap-x-5 gap-y-3 rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-slate-500">터빈 시나리오</span>
+              <select value={selectedScenarioKey} onChange={(e) => { setSelectedScenarioKey(e.target.value); const sc = allScenarios.find((s) => s.key === e.target.value); if (sc) setTurbineMw(sc.ratedMw); }} className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800">
+                <optgroup label="내장 기종">
+                  {STANDARD_TURBINE_SCENARIOS.map((s) => (
+                    <option key={s.key} value={s.key}>{s.name} · {s.ratedMw.toFixed(1)}MW</option>
+                  ))}
+                </optgroup>
+                {dbTurbineCurves.length > 0 && (
+                  <optgroup label="커스텀 커브 (DB)">
+                    {dbTurbineCurves.map((s) => (
+                      <option key={s.key} value={s.key}>{s.name} · {s.ratedMw.toFixed(1)}MW{s.notes ? ` (${s.notes})` : ""}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </label>
 
-              <div className="min-w-0 rounded-lg border border-[#d6e8ff] bg-white p-2.5">
-                <div className="text-slate-500 text-xs mb-2 flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5 text-blue-400" />기간/표시 설정</div>
-                <div className="space-y-2 text-sm">
-                  <label className="space-y-1 block">
-                    <span className="text-[11px] tracking-wide text-slate-500">표시기준</span>
-                    <select value={simPeriod} onChange={(e) => setSimPeriod(e.target.value as "daily" | "weekly" | "monthly")} className="w-full h-9 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800">
-                      <option value="daily">일별</option>
-                      <option value="weekly">주별</option>
-                      <option value="monthly">월별</option>
-                    </select>
-                  </label>
-                  <label className="space-y-1 block">
-                    <span className="text-[11px] tracking-wide text-slate-500">적용기간</span>
-                    <select value={simPreset} onChange={(e) => setSimPreset(e.target.value as "3M" | "6M" | "12M" | "custom")} className="w-full h-9 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800">
-                      <option value="3M">3M</option>
-                      <option value="6M">6M</option>
-                      <option value="12M">12M</option>
-                      <option value="custom">커스텀</option>
-                    </select>
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="space-y-1 block">
-                      <span className="text-[11px] tracking-wide text-slate-500">시작</span>
-                      <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.start} onChange={(e) => setSimStartDate(e.target.value)} className="w-full h-9 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
-                    </label>
-                    <label className="space-y-1 block">
-                      <span className="text-[11px] tracking-wide text-slate-500">종료</span>
-                      <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.end} onChange={(e) => setSimEndDate(e.target.value)} className="w-full h-9 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
-                    </label>
-                  </div>
-                  {simPreset !== "custom" && (
-                    <p className="text-[10px] text-slate-400">적용기간을 &apos;커스텀&apos;으로 바꾸면 시작/종료 날짜를 직접 지정할 수 있습니다</p>
-                  )}
-                </div>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-slate-500">MW 직접 입력</span>
+              <div className="flex gap-1.5">
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  value={turbineMw}
+                  onChange={(e) => setTurbineMw(Number(e.target.value))}
+                  className="h-9 w-20 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSelectedScenarioKey(getNearestScenarioByMw(turbineMw).key)}
+                  className="h-9 shrink-0 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                  title="내장 기종 중 입력한 MW와 가장 가까운 시나리오를 자동 선택합니다"
+                >
+                  매칭
+                </button>
               </div>
-            </div>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-slate-500">연식 구간 <span className="text-slate-400">(손실률 {Math.round(simulationSummary.loss * 100)}%)</span></span>
+              <select value={turbineAgeBand} onChange={(e) => setTurbineAgeBand(e.target.value as "0-5" | "6-10" | "11-15" | "16+")} className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800">
+                <option value="0-5">0~5년 (12%)</option>
+                <option value="6-10">6~10년 (15%)</option>
+                <option value="11-15">11~15년 (18%)</option>
+                <option value="16+">16년 이상 (22%)</option>
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-slate-500">표시기준</span>
+              <select value={simPeriod} onChange={(e) => setSimPeriod(e.target.value as "daily" | "weekly" | "monthly")} className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800">
+                <option value="daily">일별</option>
+                <option value="weekly">주별</option>
+                <option value="monthly">월별</option>
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-slate-500">적용기간</span>
+              <select value={simPreset} onChange={(e) => setSimPreset(e.target.value as "3M" | "6M" | "12M" | "custom")} className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800">
+                <option value="3M">3M</option>
+                <option value="6M">6M</option>
+                <option value="12M">12M</option>
+                <option value="custom">커스텀</option>
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-slate-500">시작</span>
+              <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.start} onChange={(e) => setSimStartDate(e.target.value)} className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800 disabled:bg-slate-100 disabled:text-slate-400" />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-slate-500">종료</span>
+              <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.end} onChange={(e) => setSimEndDate(e.target.value)} className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800 disabled:bg-slate-100 disabled:text-slate-400" />
+            </label>
+
+            <button
+              type="button"
+              onClick={resetSimulationSettings}
+              className="ml-auto h-9 text-xs text-blue-600 hover:text-blue-800 underline underline-offset-2"
+            >
+              기본값으로 초기화
+            </button>
           </div>
+          {simPreset !== "custom" && (
+            <p className="text-[11px] text-slate-400 -mt-6">적용기간을 &apos;커스텀&apos;으로 바꾸면 시작/종료 날짜를 직접 지정할 수 있습니다</p>
+          )}
 
-          {/* ── [출력] 결론 + 핵심 지표 통합 — 한 카드에서 한눈에 스캔 가능하도록 압축 ── */}
-          <div className="rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3.5">
-            <div className="flex flex-wrap items-center gap-2 mb-1.5">
+          {/* Simulation Summary — Primary KPI, 이 화면에서 가장 강조되어야 할 결과 */}
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-3">
               <span
-                className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${simulationAssessment.tone}`}
+                className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${simulationAssessment.tone}`}
                 title="고정 임계값 기준 자동 판정입니다 — 타당: 커버리지≥80% & 평균풍속≥6.5m/s / 조건부 타당: 커버리지≥60% & 평균풍속≥5.5m/s / 그 외: 보류. 전문가 검토를 대체하지 않습니다."
               >
                 {simulationAssessment.grade}
               </span>
-              <span className="text-xs text-slate-500">{simulationAssessment.reason}</span>
-            </div>
-            <div className="text-[13px] leading-6 tracking-[0.01em] text-slate-900 font-medium">{simulationConclusion}</div>
-            <div className="mt-1 text-[12px] leading-5 text-slate-700">{simulationAdvice.summary}</div>
-
-            {/* 한눈에 보는 핵심 수치 — 칩 형태로 한 줄 압축 */}
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <span className="rounded-md bg-white border border-blue-200 px-2 py-1 text-[11px] text-slate-700"><b className="text-slate-900">P50</b> {toFixedOrDash(simulationSummary.totalP50, 1)} MWh</span>
-              <span className="rounded-md bg-white border border-blue-200 px-2 py-1 text-[11px] text-slate-700"><b className="text-slate-900">P90/P50</b> {toFixedOrDash(simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0, 2)}</span>
-              <span className="rounded-md bg-white border border-blue-200 px-2 py-1 text-[11px] text-slate-700"><b className="text-slate-900">평균풍속</b> {toFixedOrDash(simulationSummary.avgWind, 2)} m/s</span>
-              <span className="rounded-md bg-white border border-blue-200 px-2 py-1 text-[11px] text-slate-700"><b className="text-slate-900">신뢰도</b> {metMastQuality.grade}등급</span>
-              <span className="rounded-md bg-white border border-blue-200 px-2 py-1 text-[11px] text-slate-700"><b className="text-slate-900">커버리지</b> {simCoverage}%</span>
+              <span className="text-sm text-slate-600">{simulationConclusion}</span>
             </div>
 
-            <details className="mt-2">
-              <summary className="cursor-pointer text-[11px] text-blue-700 font-medium">P75 / P90 · 구간평균 자세히 보기</summary>
-              <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                <div className="rounded-md bg-white border border-blue-100 px-2.5 py-1.5"><span className="text-slate-500">P50</span> <span className="float-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP50, 1)} MWh <span className="text-slate-400 font-normal">(평균 {toFixedOrDash(simulationSummary.avgP50, 1)})</span></span></div>
-                <div className="rounded-md bg-white border border-blue-100 px-2.5 py-1.5"><span className="text-slate-500">P75</span> <span className="float-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP75, 1)} MWh <span className="text-slate-400 font-normal">(평균 {toFixedOrDash(simulationSummary.avgP75, 1)})</span></span></div>
-                <div className="rounded-md bg-white border border-blue-100 px-2.5 py-1.5"><span className="text-slate-500">P90</span> <span className="float-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP90, 1)} MWh <span className="text-slate-400 font-normal">(평균 {toFixedOrDash(simulationSummary.avgP90, 1)})</span></span></div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 rounded-lg border border-slate-200 bg-white">
+              <div className="px-5 py-4">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">P50</div>
+                <div className="text-3xl font-bold text-slate-900">{toFixedOrDash(simulationSummary.totalP50, 1)}<span className="text-sm font-normal text-slate-400 ml-1">MWh</span></div>
+              </div>
+              <div className="px-5 py-4">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">P75</div>
+                <div className="text-3xl font-bold text-slate-700">{toFixedOrDash(simulationSummary.totalP75, 1)}<span className="text-sm font-normal text-slate-400 ml-1">MWh</span></div>
+              </div>
+              <div className="px-5 py-4">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">P90</div>
+                <div className="text-3xl font-bold text-slate-700">{toFixedOrDash(simulationSummary.totalP90, 1)}<span className="text-sm font-normal text-slate-400 ml-1">MWh</span></div>
+              </div>
+              <div className="px-5 py-4">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">설비이용률 (CF)</div>
+                <div className="text-3xl font-bold text-blue-600">{simCapacityFactor != null ? (simCapacityFactor * 100).toFixed(1) : "-"}<span className="text-sm font-normal text-slate-400 ml-1">%</span></div>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1.5">적용기간({effectiveSimDates.start} ~ {effectiveSimDates.end}) 누적 기준</p>
+          </div>
+
+          {/* Analysis Conditions — 인라인 메타데이터, Card 아님 */}
+          <div className="space-y-2">
+            <p className="text-xs text-slate-500">
+              터빈 {selectedScenario.ratedMw.toFixed(1)}MW · 손실률 {Math.round(simulationSummary.loss * 100)}% · 평균풍속 {toFixedOrDash(simulationSummary.avgWind, 2)}m/s · P90/P50 {toFixedOrDash(simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0, 2)} · 신뢰도 {metMastQuality.grade}등급 · 데이터 커버리지 {simCoverage}%
+            </p>
+            {(simCoverage < 60 || metMastQuality.grade === "C") && (
+              <div className="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{simulationAdvice.summary}</span>
+              </div>
+            )}
+            <p className="text-[11px] text-amber-700">※ 참고용 추정치이며 발전량 보증값이 아닙니다. 등급은 자동판정입니다(기준: 배지에 마우스오버).</p>
+          </div>
+
+          {/* Generation Trend — 이 페이지의 핵심 분석 도구, 가장 크게 */}
+          <div>
+            <h4 className="text-sm font-semibold text-slate-900 mb-1">발전량 추이 (P50 · P75 · P90)</h4>
+            <p className="text-[11px] text-slate-400 mb-2">차트에 마우스를 올리면 아래 상세 데이터에서 해당 구간이 강조됩니다.</p>
+            <ResponsiveContainer width="100%" height={440}>
+              <LineChart
+                data={simulationRows}
+                onMouseMove={(state) => setSimHighlightIndex(typeof state?.activeTooltipIndex === "number" ? state.activeTooltipIndex : null)}
+                onMouseLeave={() => setSimHighlightIndex(null)}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} />
+                <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" MWh" />
+                <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#0f172a" }} />
+                <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: "12px" }} />
+                <Line type="monotone" dataKey="p50" name="P50" stroke="#2563eb" dot={false} strokeWidth={2.2} />
+                <Line type="monotone" dataKey="p75" name="P75" stroke="#10b981" dot={false} strokeWidth={1.8} strokeDasharray="6 4" />
+                <Line type="monotone" dataKey="p90" name="P90" stroke="#f59e0b" dot={false} strokeWidth={1.8} strokeDasharray="2 3" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Detailed Data — Secondary/Detail, 기본 접힘 */}
+          <div className="space-y-2">
+            <details className="group rounded-lg border border-slate-200">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-700 flex items-center justify-between list-none">
+                기간별 상세 데이터
+                <span className="text-slate-400 text-xs transition-transform group-open:rotate-180">▾</span>
+              </summary>
+              <div className="px-4 pb-4">
+                <div className="h-[220px] overflow-auto border border-slate-200 rounded-lg">
+                  <table className="w-full min-w-[700px] text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500">
+                        <th className="text-left px-2 py-2">구간</th>
+                        <th className="text-right px-2 py-2">평균풍속</th>
+                        <th className="text-right px-2 py-2">P50</th>
+                        <th className="text-right px-2 py-2">P75</th>
+                        <th className="text-right px-2 py-2">P90</th>
+                        <th className="text-right px-2 py-2">적용 손실률</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="sticky top-0 bg-slate-50 border-b border-slate-200 text-slate-800 font-semibold">
+                        <td className="px-2 py-2">통합</td>
+                        <td className="px-2 py-2 text-right">{toFixedOrDash(simulationSummary.avgWind, 2)} m/s</td>
+                        <td className="px-2 py-2 text-right">{toFixedOrDash(simulationSummary.avgP50, 1)}</td>
+                        <td className="px-2 py-2 text-right">{toFixedOrDash(simulationSummary.avgP75, 1)}</td>
+                        <td className="px-2 py-2 text-right">{toFixedOrDash(simulationSummary.avgP90, 1)}</td>
+                        <td className="px-2 py-2 text-right">{Math.round(simulationSummary.loss * 100)}%</td>
+                      </tr>
+                      {simulationRows.map((r, i) => (
+                        <tr
+                          key={r.label}
+                          onMouseEnter={() => setSimHighlightIndex(i)}
+                          onMouseLeave={() => setSimHighlightIndex(null)}
+                          className={`border-b border-slate-100 text-slate-700 ${simHighlightIndex === i ? "bg-blue-50" : i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}
+                        >
+                          <td className="px-2 py-1.5">{r.label}</td>
+                          <td className="px-2 py-1.5 text-right">{toFixedOrDash(r.wind, 2)} m/s</td>
+                          <td className="px-2 py-1.5 text-right">{toFixedOrDash(r.p50, 1)}</td>
+                          <td className="px-2 py-1.5 text-right">{toFixedOrDash(r.p75, 1)}</td>
+                          <td className="px-2 py-1.5 text-right">{toFixedOrDash(r.p90, 1)}</td>
+                          <td className="px-2 py-1.5 text-right">{Math.round(simulationSummary.loss * 100)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </details>
 
-            <div className="mt-2 text-[11px] text-amber-700">※ 참고용 추정치이며 발전량 보증값이 아닙니다. 등급은 자동판정입니다(기준: 배지에 마우스오버).</div>
-          </div>
-
-          {/* ── AEP 연간 발전량 추정 (위 시뮬레이션 조건 설정과 무관한 별도 섹션) ── */}
-          <div className="pt-2 border-t border-[#d6e8ff]">
-            <p className="text-[11px] text-slate-400 mb-2">↓ 아래는 위 조건 설정과 무관한 참고 지표입니다 (사이트 전체 기간 기준)</p>
-          </div>
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Wind className="w-4 h-4 text-emerald-600" />
-              <span className="text-sm font-semibold text-slate-900">AEP 연간 발전량 추정</span>
-              <span
-                className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 inline-flex items-center gap-1"
-                title="이 카드는 위의 '적용기간(3M/6M/12M/커스텀)' 선택과 무관하게 항상 사이트 개설 이후 전체 ch1 데이터로 계산됩니다."
-              >
-                <AlertTriangle className="w-3 h-3" /> 항상 전체 기간 기준 (위 적용기간 선택과 무관)
-              </span>
-            </div>
-            {!aepEstimate ? (
-              <p className="text-xs text-slate-500">ch1 일간 평균 데이터 10일 이상 필요합니다.</p>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-                  <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2.5">
-                    <div className="text-[11px] text-slate-500 mb-0.5">AEP P50</div>
-                    <div className="text-lg font-bold text-emerald-700">{aepEstimate.aepNetGwh.toFixed(2)} <span className="text-xs font-normal">GWh/yr</span></div>
-                  </div>
-                  <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2.5">
-                    <div className="text-[11px] text-slate-500 mb-0.5">AEP P75</div>
-                    <div className="text-lg font-bold text-slate-700">{aepEstimate.p75.toFixed(2)} <span className="text-xs font-normal">GWh/yr</span></div>
-                  </div>
-                  <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2.5">
-                    <div className="text-[11px] text-slate-500 mb-0.5">AEP P90</div>
-                    <div className="text-lg font-bold text-slate-700">{aepEstimate.p90.toFixed(2)} <span className="text-xs font-normal">GWh/yr</span></div>
-                  </div>
-                  <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2.5">
-                    <div className="text-[11px] text-slate-500 mb-0.5">설비이용률 (CF)</div>
-                    <div className="text-lg font-bold text-blue-700">{(aepEstimate.cf * 100).toFixed(1)} <span className="text-xs font-normal">%</span></div>
-                  </div>
+            <details className="group rounded-lg border border-slate-200">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-700 flex items-center justify-between list-none">
+                계산 근거 — MCP-lite 보정 · 불확실성 분해 · 계산 메타정보
+                <span className="text-slate-400 text-xs transition-transform group-open:rotate-180">▾</span>
+              </summary>
+              <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-700">
+                <div
+                  className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2"
+                  title="외부 장기 기준국(재분석 데이터 등)과의 상관보정이 아니라, 이 사이트 자체의 최근 365일 평균 대비 현재 적용기간 평균의 비율입니다. 사이트 운영 기간이 1년 미만이면 두 기간이 거의 겹쳐 보정 의미가 작습니다."
+                >
+                  MCP-lite(사이트 내부 보정): {toFixedOrDash(mcpLiteSummary.factor, 3)} ({mcpLiteSummary.confidence}) · 적용기간 {toFixedOrDash(mcpLiteSummary.shortAvg, 2)} / 최근 365일 {toFixedOrDash(mcpLiteSummary.longAvg, 2)} m/s
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-600">
-                  <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">Weibull k = {aepEstimate.k.toFixed(3)}</div>
-                  <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">Weibull A = {aepEstimate.A.toFixed(3)} m/s</div>
-                  <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">총 손실률 {aepEstimate.totalLossPct}%</div>
-                  <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">기준 터빈 {aepEstimate.scenario.split(" ").slice(1, 3).join(" ")}</div>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-2">데이터 {aepEstimate.n}일 · Gross {aepEstimate.aepGrossGwh.toFixed(2)} GWh · 순발전량 P50 기준</p>
-              </>
-            )}
-          </div>
-
-          <details className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3 text-xs text-slate-700">
-            <summary className="cursor-pointer font-semibold text-slate-900">근거 상세 보기 — MCP-lite 보정 · 불확실성 분해 · 계산 메타정보</summary>
-            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div
-                className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5"
-                title="외부 장기 기준국(재분석 데이터 등)과의 상관보정이 아니라, 이 사이트 자체의 최근 365일 평균 대비 현재 적용기간 평균의 비율입니다. 사이트 운영 기간이 1년 미만이면 두 기간이 거의 겹쳐 보정 의미가 작습니다."
-              >
-                MCP-lite(사이트 내부 보정): {toFixedOrDash(mcpLiteSummary.factor, 3)} ({mcpLiteSummary.confidence}) · 적용기간 {toFixedOrDash(mcpLiteSummary.shortAvg, 2)} / 최근 365일 {toFixedOrDash(mcpLiteSummary.longAvg, 2)} m/s
+                <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2">불확실성(계측/모델/MCP): ±{toFixedOrDash(uncertaintyBreakdown.measurementPct, 1)} / ±{toFixedOrDash(uncertaintyBreakdown.modelPct, 1)} / ±{toFixedOrDash(uncertaintyBreakdown.mcpPct, 1)}%</div>
+                <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2">총합 불확실성: ±{toFixedOrDash(uncertaintyBreakdown.totalPct, 1)}% · P75/P50 {toFixedOrDash(uncertaintyBreakdown.p75p50, 2)} · P90/P50 {toFixedOrDash(uncertaintyBreakdown.p90p50, 2)}</div>
+                <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2">메타: {simulationMeta.version} · {simulationMeta.generatedAt} · 총손실률 {simulationMeta.totalLossPct}%</div>
               </div>
-              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">불확실성(계측/모델/MCP): ±{toFixedOrDash(uncertaintyBreakdown.measurementPct, 1)} / ±{toFixedOrDash(uncertaintyBreakdown.modelPct, 1)} / ±{toFixedOrDash(uncertaintyBreakdown.mcpPct, 1)}%</div>
-              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">총합 불확실성: ±{toFixedOrDash(uncertaintyBreakdown.totalPct, 1)}% · P75/P50 {toFixedOrDash(uncertaintyBreakdown.p75p50, 2)} · P90/P50 {toFixedOrDash(uncertaintyBreakdown.p90p50, 2)}</div>
-              <div className="rounded border border-[#d6e8ff] bg-white px-2 py-1.5">메타: {simulationMeta.version} · {simulationMeta.generatedAt} · 총손실률 {simulationMeta.totalLossPct}%</div>
-            </div>
-          </details>
+            </details>
 
-
-
-          <p className="text-[11px] text-slate-400">차트에 마우스를 올리면 아래 테이블에서 해당 구간이 강조됩니다.</p>
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart
-              data={simulationRows}
-              onMouseMove={(state) => setSimHighlightIndex(typeof state?.activeTooltipIndex === "number" ? state.activeTooltipIndex : null)}
-              onMouseLeave={() => setSimHighlightIndex(null)}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} />
-              <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" MWh" />
-              <Tooltip contentStyle={{ backgroundColor: "rgba(255,255,255,0.96)", border: "1px solid #d6e8ff", borderRadius: "8px", color: "#0f172a" }} />
-              <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: "12px" }} />
-              <Line type="monotone" dataKey="p50" name="P50" stroke="#2f80ed" dot={false} strokeWidth={2.2} />
-              <Line type="monotone" dataKey="p75" name="P75" stroke="#10b981" dot={false} strokeWidth={1.8} strokeDasharray="6 4" />
-              <Line type="monotone" dataKey="p90" name="P90" stroke="#f59e0b" dot={false} strokeWidth={1.8} strokeDasharray="2 3" />
-            </LineChart>
-          </ResponsiveContainer>
-
-          <div className="h-[220px] overflow-auto border border-[#d6e8ff] rounded-lg">
-            <table className="w-full min-w-[700px] text-xs">
-              <thead>
-                <tr className="border-b border-[#d6e8ff] text-slate-500">
-                  <th className="text-left px-2 py-2">구간</th>
-                  <th className="text-right px-2 py-2">평균풍속</th>
-                  <th className="text-right px-2 py-2">P50</th>
-                  <th className="text-right px-2 py-2">P75</th>
-                  <th className="text-right px-2 py-2">P90</th>
-                  <th className="text-right px-2 py-2">적용 손실률</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="sticky top-0 bg-blue-50 border-b border-[#cfe3ff] text-slate-800 font-semibold">
-                  <td className="px-2 py-2">통합</td>
-                  <td className="px-2 py-2 text-right">{toFixedOrDash(simulationSummary.avgWind, 2)} m/s</td>
-                  <td className="px-2 py-2 text-right">{toFixedOrDash(simulationSummary.avgP50, 1)}</td>
-                  <td className="px-2 py-2 text-right">{toFixedOrDash(simulationSummary.avgP75, 1)}</td>
-                  <td className="px-2 py-2 text-right">{toFixedOrDash(simulationSummary.avgP90, 1)}</td>
-                  <td className="px-2 py-2 text-right">{Math.round(simulationSummary.loss * 100)}%</td>
-                </tr>
-                {simulationRows.map((r, i) => (
-                  <tr
-                    key={r.label}
-                    onMouseEnter={() => setSimHighlightIndex(i)}
-                    onMouseLeave={() => setSimHighlightIndex(null)}
-                    className={`border-b border-[#e6f0ff] text-slate-700 ${simHighlightIndex === i ? "bg-blue-100" : i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}
+            <details className="group rounded-lg border border-emerald-200">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-700 flex items-center justify-between list-none">
+                <span className="flex items-center gap-2">
+                  <Wind className="w-4 h-4 text-emerald-600" />
+                  AEP 전체기간 참고 지표
+                  <span
+                    className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 inline-flex items-center gap-1"
+                    title="이 지표는 위의 '적용기간(3M/6M/12M/커스텀)' 선택과 무관하게 항상 사이트 개설 이후 전체 ch1 데이터로 계산됩니다."
                   >
-                    <td className="px-2 py-1.5">{r.label}</td>
-                    <td className="px-2 py-1.5 text-right">{toFixedOrDash(r.wind, 2)} m/s</td>
-                    <td className="px-2 py-1.5 text-right">{toFixedOrDash(r.p50, 1)}</td>
-                    <td className="px-2 py-1.5 text-right">{toFixedOrDash(r.p75, 1)}</td>
-                    <td className="px-2 py-1.5 text-right">{toFixedOrDash(r.p90, 1)}</td>
-                    <td className="px-2 py-1.5 text-right">{Math.round(simulationSummary.loss * 100)}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <p className="text-[11px] text-amber-700">※ 시뮬레이션 값은 사업성 검토 참고용이며 발전량 보증값이 아닙니다.</p>
-            <button
-              type="button"
-              onClick={downloadPreFeasibilityReport}
-              className="rounded-lg border border-blue-500/40 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-500/20 shrink-0"
-            >
-              사전타당성 리포트 다운로드
-            </button>
+                    <AlertTriangle className="w-3 h-3" /> 적용기간 선택과 무관
+                  </span>
+                </span>
+                <span className="text-slate-400 text-xs transition-transform group-open:rotate-180">▾</span>
+              </summary>
+              <div className="px-4 pb-4">
+                {!aepEstimate ? (
+                  <p className="text-xs text-slate-500">ch1 일간 평균 데이터 10일 이상 필요합니다.</p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                      <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2.5">
+                        <div className="text-[11px] text-slate-500 mb-0.5">AEP P50</div>
+                        <div className="text-lg font-bold text-emerald-700">{aepEstimate.aepNetGwh.toFixed(2)} <span className="text-xs font-normal">GWh/yr</span></div>
+                      </div>
+                      <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2.5">
+                        <div className="text-[11px] text-slate-500 mb-0.5">AEP P75</div>
+                        <div className="text-lg font-bold text-slate-700">{aepEstimate.p75.toFixed(2)} <span className="text-xs font-normal">GWh/yr</span></div>
+                      </div>
+                      <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2.5">
+                        <div className="text-[11px] text-slate-500 mb-0.5">AEP P90</div>
+                        <div className="text-lg font-bold text-slate-700">{aepEstimate.p90.toFixed(2)} <span className="text-xs font-normal">GWh/yr</span></div>
+                      </div>
+                      <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2.5">
+                        <div className="text-[11px] text-slate-500 mb-0.5">설비이용률 (CF)</div>
+                        <div className="text-lg font-bold text-blue-700">{(aepEstimate.cf * 100).toFixed(1)} <span className="text-xs font-normal">%</span></div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-600">
+                      <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">Weibull k = {aepEstimate.k.toFixed(3)}</div>
+                      <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">Weibull A = {aepEstimate.A.toFixed(3)} m/s</div>
+                      <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">총 손실률 {aepEstimate.totalLossPct}%</div>
+                      <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">기준 터빈 {aepEstimate.scenario.split(" ").slice(1, 3).join(" ")}</div>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-2">데이터 {aepEstimate.n}일 · Gross {aepEstimate.aepGrossGwh.toFixed(2)} GWh · 순발전량 P50 기준</p>
+                  </>
+                )}
+              </div>
+            </details>
           </div>
         </div>
       )}
