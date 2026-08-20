@@ -2307,8 +2307,14 @@ export default function SiteDetail({ site }: { site: Site }) {
             <div className="text-[11px] tracking-wide text-blue-700 mb-1.5">한 줄 결론</div>
             <div className="flex flex-wrap items-center gap-2 mb-1.5">
               <span className="text-slate-600 text-xs">사업성 평가</span>
-              <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${simulationAssessment.tone}`}>{simulationAssessment.grade}</span>
+              <span
+                className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${simulationAssessment.tone}`}
+                title="고정 임계값 기준 자동 판정입니다 — 타당: 커버리지≥80% & 평균풍속≥6.5m/s / 조건부 타당: 커버리지≥60% & 평균풍속≥5.5m/s / 그 외: 보류. 전문가 검토를 대체하지 않습니다."
+              >
+                {simulationAssessment.grade}
+              </span>
               <span className="text-xs text-slate-500">{simulationAssessment.reason}</span>
+              <span className="text-[10px] text-slate-400">(자동판정 · 상세기준 hover)</span>
             </div>
             <div className="text-[13px] leading-6 tracking-[0.01em] text-slate-900 font-medium">{simulationConclusion}</div>
             <div className="mt-1 text-[12px] leading-5 text-slate-700">{simulationAdvice.summary}</div>
@@ -2337,8 +2343,11 @@ export default function SiteDetail({ site }: { site: Site }) {
             </div>
           </div>
 
-          {/* ── AEP 연간 발전량 추정 ── */}
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
+          {/* ── AEP 연간 발전량 추정 (위 시뮬레이션 조건 설정과 무관한 별도 섹션) ── */}
+          <div className="pt-2 border-t-2 border-dashed border-slate-300">
+            <p className="text-[11px] text-slate-400 mb-2">↓ 아래는 위 조건 설정과 무관한 참고 지표입니다 (사이트 전체 기간 기준)</p>
+          </div>
+          <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50/60 p-4">
             <div className="flex items-center gap-2 mb-3">
               <Wind className="w-4 h-4 text-emerald-600" />
               <span className="text-sm font-semibold text-slate-900">AEP 연간 발전량 추정</span>
