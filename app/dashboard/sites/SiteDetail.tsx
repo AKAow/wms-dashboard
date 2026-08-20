@@ -296,6 +296,7 @@ export default function SiteDetail({ site }: { site: Site }) {
   const [reportMetaForm, setReportMetaForm] = useState(siteReportMeta);
   const [reportMetaSaving, setReportMetaSaving] = useState(false);
   const [reportMetaError, setReportMetaError] = useState("");
+  const [simHighlightIndex, setSimHighlightIndex] = useState<number | null>(null);
   // 8채널 동시 표시 차트 접근성: 기본은 Shadow 센서(ch4/6/8) 숨김, 범례 클릭으로 토글
   const [hiddenChannels, setHiddenChannels] = useState<Set<string>>(new Set(["ch4", "ch6", "ch8"]));
   const toggleChannel = useCallback((ch: string) => {
@@ -1551,6 +1552,14 @@ export default function SiteDetail({ site }: { site: Site }) {
     return { k, A, mu, n, aepGrossGwh, aepNetGwh, cf, p75, p90, scenario: scenario.name, totalLossPct };
   }, [dailyStats, selectedScenario, simulationSummary.loss, uncertaintyBreakdown]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const resetSimulationSettings = useCallback(() => {
+    setTurbineAgeBand("6-10");
+    setSelectedScenarioKey("M-4.2-IEC2");
+    setTurbineMw(4.2);
+    setSimPeriod("daily");
+    setSimPreset("6M");
+  }, []);
+
   const downloadPreFeasibilityReport = useCallback(() => {
     const wb = XLSX.utils.book_new();
     const rows = [
@@ -2231,8 +2240,17 @@ export default function SiteDetail({ site }: { site: Site }) {
 
           {/* ── [입력] 시뮬레이션 조건 설정 ── */}
           <div className="rounded-lg border border-blue-300 bg-blue-50/40 p-3">
-            <div className="text-xs font-semibold text-blue-800 mb-2 flex items-center gap-1.5">
-              <Settings className="w-3.5 h-3.5 text-blue-500" /> 시뮬레이션 조건 설정 <span className="font-normal text-slate-400">— 아래 결과는 이 설정을 따릅니다</span>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="text-xs font-semibold text-blue-800 flex items-center gap-1.5">
+                <Settings className="w-3.5 h-3.5 text-blue-500" /> 시뮬레이션 조건 설정 <span className="font-normal text-slate-400">— 아래 결과는 이 설정을 따릅니다</span>
+              </div>
+              <button
+                type="button"
+                onClick={resetSimulationSettings}
+                className="shrink-0 text-[11px] text-blue-600 hover:text-blue-800 underline underline-offset-2"
+              >
+                기본값으로 초기화
+              </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="min-w-0 rounded-lg border border-[#d6e8ff] bg-white p-2.5">
@@ -2263,6 +2281,27 @@ export default function SiteDetail({ site }: { site: Site }) {
                         </optgroup>
                       )}
                     </select>
+                  </label>
+                  <label className="space-y-1 block">
+                    <span className="text-[11px] tracking-wide text-slate-500">검토 중인 터빈 용량 직접 입력 (MW)</span>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        value={turbineMw}
+                        onChange={(e) => setTurbineMw(Number(e.target.value))}
+                        className="w-full rounded-lg border border-[#d6e8ff] bg-white px-3 py-2 text-slate-800"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setSelectedScenarioKey(getNearestScenarioByMw(turbineMw).key)}
+                        className="shrink-0 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                        title="내장 기종 중 입력한 MW와 가장 가까운 시나리오를 자동 선택합니다"
+                      >
+                        가까운 기종 매칭
+                      </button>
+                    </div>
                   </label>
                 </div>
               </div>
@@ -2297,16 +2336,17 @@ export default function SiteDetail({ site }: { site: Site }) {
                       <input type="date" disabled={simPreset !== "custom"} value={effectiveSimDates.end} onChange={(e) => setSimEndDate(e.target.value)} className="w-full h-9 rounded-md border border-[#d6e8ff] bg-white px-2 text-slate-800 disabled:bg-slate-100" />
                     </label>
                   </div>
+                  {simPreset !== "custom" && (
+                    <p className="text-[10px] text-slate-400">적용기간을 &apos;커스텀&apos;으로 바꾸면 시작/종료 날짜를 직접 지정할 수 있습니다</p>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ── [출력] 한 줄 결론 ── */}
+          {/* ── [출력] 결론 + 핵심 지표 통합 — 한 카드에서 한눈에 스캔 가능하도록 압축 ── */}
           <div className="rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3.5">
-            <div className="text-[11px] tracking-wide text-blue-700 mb-1.5">한 줄 결론</div>
             <div className="flex flex-wrap items-center gap-2 mb-1.5">
-              <span className="text-slate-600 text-xs">사업성 평가</span>
               <span
                 className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${simulationAssessment.tone}`}
                 title="고정 임계값 기준 자동 판정입니다 — 타당: 커버리지≥80% & 평균풍속≥6.5m/s / 조건부 타당: 커버리지≥60% & 평균풍속≥5.5m/s / 그 외: 보류. 전문가 검토를 대체하지 않습니다."
@@ -2314,33 +2354,29 @@ export default function SiteDetail({ site }: { site: Site }) {
                 {simulationAssessment.grade}
               </span>
               <span className="text-xs text-slate-500">{simulationAssessment.reason}</span>
-              <span className="text-[11px] text-slate-400">(자동판정 · 기준 보기: 배지에 마우스오버)</span>
             </div>
             <div className="text-[13px] leading-6 tracking-[0.01em] text-slate-900 font-medium">{simulationConclusion}</div>
             <div className="mt-1 text-[12px] leading-5 text-slate-700">{simulationAdvice.summary}</div>
-            <div className="mt-1.5 text-[11px] text-amber-700">※ 참고용 추정치이며 발전량 보증값이 아닙니다.</div>
-          </div>
 
-          {/* ── [출력] 핵심 지표 (위 설정 기준 계산 결과, 중복 노출 없이 한 곳에 통합) ── */}
-          <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3">
-            <div className="text-slate-500 text-xs mb-2 flex items-center gap-1.5"><Gauge className="w-3.5 h-3.5 text-blue-400" />핵심 지표 <span className="text-slate-400 font-normal">— 계산 결과</span></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-              <table className="w-full">
-                <tbody>
-                  <tr><td className="py-1 text-slate-600">P50</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP50, 1)} MWh <span className="text-slate-400 font-normal">(구간평균 {toFixedOrDash(simulationSummary.avgP50, 1)})</span></td></tr>
-                  <tr><td className="py-1 text-slate-600">P75</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP75, 1)} MWh <span className="text-slate-400 font-normal">(구간평균 {toFixedOrDash(simulationSummary.avgP75, 1)})</span></td></tr>
-                  <tr><td className="py-1 text-slate-600">P90</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP90, 1)} MWh <span className="text-slate-400 font-normal">(구간평균 {toFixedOrDash(simulationSummary.avgP90, 1)})</span></td></tr>
-                </tbody>
-              </table>
-              <table className="w-full">
-                <tbody>
-                  <tr><td className="py-1 text-slate-600">평균 풍속</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.avgWind, 2)} m/s</td></tr>
-                  <tr><td className="py-1 text-slate-600">P90/P50</td><td className="py-1 text-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0, 2)}</td></tr>
-                  <tr><td className="py-1 text-slate-600">신뢰도 등급</td><td className="py-1 text-right font-semibold text-slate-900">{metMastQuality.grade}</td></tr>
-                  <tr><td className="py-1 text-slate-600">기간 커버리지</td><td className="py-1 text-right font-semibold text-slate-900">{simCoverage}%</td></tr>
-                </tbody>
-              </table>
+            {/* 한눈에 보는 핵심 수치 — 칩 형태로 한 줄 압축 */}
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <span className="rounded-md bg-white border border-blue-200 px-2 py-1 text-[11px] text-slate-700"><b className="text-slate-900">P50</b> {toFixedOrDash(simulationSummary.totalP50, 1)} MWh</span>
+              <span className="rounded-md bg-white border border-blue-200 px-2 py-1 text-[11px] text-slate-700"><b className="text-slate-900">P90/P50</b> {toFixedOrDash(simulationSummary.totalP50 > 0 ? simulationSummary.totalP90 / simulationSummary.totalP50 : 0, 2)}</span>
+              <span className="rounded-md bg-white border border-blue-200 px-2 py-1 text-[11px] text-slate-700"><b className="text-slate-900">평균풍속</b> {toFixedOrDash(simulationSummary.avgWind, 2)} m/s</span>
+              <span className="rounded-md bg-white border border-blue-200 px-2 py-1 text-[11px] text-slate-700"><b className="text-slate-900">신뢰도</b> {metMastQuality.grade}등급</span>
+              <span className="rounded-md bg-white border border-blue-200 px-2 py-1 text-[11px] text-slate-700"><b className="text-slate-900">커버리지</b> {simCoverage}%</span>
             </div>
+
+            <details className="mt-2">
+              <summary className="cursor-pointer text-[11px] text-blue-700 font-medium">P75 / P90 · 구간평균 자세히 보기</summary>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                <div className="rounded-md bg-white border border-blue-100 px-2.5 py-1.5"><span className="text-slate-500">P50</span> <span className="float-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP50, 1)} MWh <span className="text-slate-400 font-normal">(평균 {toFixedOrDash(simulationSummary.avgP50, 1)})</span></span></div>
+                <div className="rounded-md bg-white border border-blue-100 px-2.5 py-1.5"><span className="text-slate-500">P75</span> <span className="float-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP75, 1)} MWh <span className="text-slate-400 font-normal">(평균 {toFixedOrDash(simulationSummary.avgP75, 1)})</span></span></div>
+                <div className="rounded-md bg-white border border-blue-100 px-2.5 py-1.5"><span className="text-slate-500">P90</span> <span className="float-right font-semibold text-slate-900">{toFixedOrDash(simulationSummary.totalP90, 1)} MWh <span className="text-slate-400 font-normal">(평균 {toFixedOrDash(simulationSummary.avgP90, 1)})</span></span></div>
+              </div>
+            </details>
+
+            <div className="mt-2 text-[11px] text-amber-700">※ 참고용 추정치이며 발전량 보증값이 아닙니다. 등급은 자동판정입니다(기준: 배지에 마우스오버).</div>
           </div>
 
           {/* ── AEP 연간 발전량 추정 (위 시뮬레이션 조건 설정과 무관한 별도 섹션) ── */}
@@ -2408,8 +2444,13 @@ export default function SiteDetail({ site }: { site: Site }) {
 
 
 
+          <p className="text-[11px] text-slate-400">차트에 마우스를 올리면 아래 테이블에서 해당 구간이 강조됩니다.</p>
           <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={simulationRows}>
+            <LineChart
+              data={simulationRows}
+              onMouseMove={(state) => setSimHighlightIndex(typeof state?.activeTooltipIndex === "number" ? state.activeTooltipIndex : null)}
+              onMouseLeave={() => setSimHighlightIndex(null)}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#d6e8ff" />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} />
               <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" MWh" />
@@ -2443,7 +2484,12 @@ export default function SiteDetail({ site }: { site: Site }) {
                   <td className="px-2 py-2 text-right">{Math.round(simulationSummary.loss * 100)}%</td>
                 </tr>
                 {simulationRows.map((r, i) => (
-                  <tr key={r.label} className={`border-b border-[#e6f0ff] text-slate-700 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
+                  <tr
+                    key={r.label}
+                    onMouseEnter={() => setSimHighlightIndex(i)}
+                    onMouseLeave={() => setSimHighlightIndex(null)}
+                    className={`border-b border-[#e6f0ff] text-slate-700 ${simHighlightIndex === i ? "bg-blue-100" : i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}
+                  >
                     <td className="px-2 py-1.5">{r.label}</td>
                     <td className="px-2 py-1.5 text-right">{toFixedOrDash(r.wind, 2)} m/s</td>
                     <td className="px-2 py-1.5 text-right">{toFixedOrDash(r.p50, 1)}</td>
@@ -2456,7 +2502,16 @@ export default function SiteDetail({ site }: { site: Site }) {
             </table>
           </div>
 
-          <p className="text-[11px] text-amber-700">※ 시뮬레이션 값은 사업성 검토 참고용이며 발전량 보증값이 아닙니다.</p>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-[11px] text-amber-700">※ 시뮬레이션 값은 사업성 검토 참고용이며 발전량 보증값이 아닙니다.</p>
+            <button
+              type="button"
+              onClick={downloadPreFeasibilityReport}
+              className="rounded-lg border border-blue-500/40 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-500/20 shrink-0"
+            >
+              사전타당성 리포트 다운로드
+            </button>
+          </div>
         </div>
       )}
 
