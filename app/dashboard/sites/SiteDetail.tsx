@@ -1398,12 +1398,18 @@ export default function SiteDetail({ site }: { site: Site }) {
     return { totalP50, totalP75, totalP90, avgWind, avgP50, avgP75, avgP90, loss: AGE_LOSS_MAP[turbineAgeBand] };
   }, [simulationDailyRows, simulationRows, turbineAgeBand]);
 
-  // 적용기간 기준 설비이용률(CF) = 누적 P50 발전량 / (정격출력 × 관측시간)
+  // 적용기간 기준 설비이용률(CF) = 누적 P50 발전량 / (정격출력 × 적용기간 캘린더 시간)
+  // 분모를 "관측된 날짜 수"가 아니라 적용기간 전체(캘린더 기준)로 잡아야 결측일을
+  // 발전 0으로 취급하는 셈이 되어, 결측이 많을 때 CF가 부풀려지지 않는다.
+  // AEP 참고지표의 CF(연간 8760시간 고정 분모)와 정의를 일치시키는 목적도 있다.
   const simCapacityFactor = useMemo(() => {
-    const hours = simulationDailyRows.length * 24;
+    const start = new Date(`${effectiveSimDates.start}T00:00:00`);
+    const end = new Date(`${effectiveSimDates.end}T23:59:59`);
+    const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+    const hours = totalDays * 24;
     if (hours <= 0 || selectedScenario.ratedMw <= 0) return null;
     return simulationSummary.totalP50 / (selectedScenario.ratedMw * hours);
-  }, [simulationDailyRows.length, selectedScenario.ratedMw, simulationSummary.totalP50]);
+  }, [effectiveSimDates, selectedScenario.ratedMw, simulationSummary.totalP50]);
 
   // 시뮬레이션 적용기간(effectiveSimDates) 기준 데이터 커버리지.
   // monthCoverage(Overview/월별 탭에서 선택된 단일 달)를 그대로 쓰면 시뮬레이션
