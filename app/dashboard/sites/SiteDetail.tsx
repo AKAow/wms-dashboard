@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { MapPin, Activity, Wind, Navigation, BarChart2, Table2, CalendarDays, Search, Bell, Download, Loader2 } from "lucide-react";
+import { MapPin, Activity, Wind, Navigation, BarChart2, Table2, CalendarDays, Search, Bell, Download, Loader2, Settings, AlertTriangle, Gauge } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import * as XLSX from "xlsx";
 import type { Site, DailyStat, Measurement } from "@/lib/types";
@@ -2230,13 +2230,13 @@ export default function SiteDetail({ site }: { site: Site }) {
           <p className="text-xs text-slate-600">연식 기반 손실률과 적용 구간을 선택해 P50/P75/P90 추정치를 계산합니다.</p>
 
           {/* ── [입력] 시뮬레이션 조건 설정 ── */}
-          <div className="rounded-lg border-2 border-slate-300 bg-slate-50 p-3">
-            <div className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1.5">
-              <span aria-hidden>⚙</span> 시뮬레이션 조건 설정 <span className="font-normal text-slate-400">— 아래 결과는 이 설정을 따릅니다</span>
+          <div className="rounded-lg border border-blue-300 bg-blue-50/40 p-3">
+            <div className="text-xs font-semibold text-blue-800 mb-2 flex items-center gap-1.5">
+              <Settings className="w-3.5 h-3.5 text-blue-500" /> 시뮬레이션 조건 설정 <span className="font-normal text-slate-400">— 아래 결과는 이 설정을 따릅니다</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-2.5">
-                <div className="text-slate-500 text-xs mb-2">터빈 설정</div>
+              <div className="min-w-0 rounded-lg border border-[#d6e8ff] bg-white p-2.5">
+                <div className="text-slate-500 text-xs mb-2 flex items-center gap-1.5"><Wind className="w-3.5 h-3.5 text-blue-400" />터빈 설정</div>
                 <div className="space-y-2 text-sm">
                   <label className="space-y-1 block">
                     <span className="text-[11px] tracking-wide text-slate-500 inline-flex items-center gap-2 whitespace-nowrap">터빈 연식 구간 <b className="text-slate-700">손실률 {Math.round(simulationSummary.loss * 100)}%</b></span>
@@ -2267,8 +2267,8 @@ export default function SiteDetail({ site }: { site: Site }) {
                 </div>
               </div>
 
-              <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-2.5">
-                <div className="text-slate-500 text-xs mb-2">기간/표시 설정</div>
+              <div className="min-w-0 rounded-lg border border-[#d6e8ff] bg-white p-2.5">
+                <div className="text-slate-500 text-xs mb-2 flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5 text-blue-400" />기간/표시 설정</div>
                 <div className="space-y-2 text-sm">
                   <label className="space-y-1 block">
                     <span className="text-[11px] tracking-wide text-slate-500">표시기준</span>
@@ -2314,7 +2314,7 @@ export default function SiteDetail({ site }: { site: Site }) {
                 {simulationAssessment.grade}
               </span>
               <span className="text-xs text-slate-500">{simulationAssessment.reason}</span>
-              <span className="text-[10px] text-slate-400">(자동판정 · 상세기준 hover)</span>
+              <span className="text-[11px] text-slate-400">(자동판정 · 기준 보기: 배지에 마우스오버)</span>
             </div>
             <div className="text-[13px] leading-6 tracking-[0.01em] text-slate-900 font-medium">{simulationConclusion}</div>
             <div className="mt-1 text-[12px] leading-5 text-slate-700">{simulationAdvice.summary}</div>
@@ -2323,7 +2323,7 @@ export default function SiteDetail({ site }: { site: Site }) {
 
           {/* ── [출력] 핵심 지표 (위 설정 기준 계산 결과, 중복 노출 없이 한 곳에 통합) ── */}
           <div className="rounded-lg border border-[#d6e8ff] bg-white/70 p-3">
-            <div className="text-slate-500 text-xs mb-2">핵심 지표 <span className="text-slate-400 font-normal">— 계산 결과</span></div>
+            <div className="text-slate-500 text-xs mb-2 flex items-center gap-1.5"><Gauge className="w-3.5 h-3.5 text-blue-400" />핵심 지표 <span className="text-slate-400 font-normal">— 계산 결과</span></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
               <table className="w-full">
                 <tbody>
@@ -2344,18 +2344,18 @@ export default function SiteDetail({ site }: { site: Site }) {
           </div>
 
           {/* ── AEP 연간 발전량 추정 (위 시뮬레이션 조건 설정과 무관한 별도 섹션) ── */}
-          <div className="pt-2 border-t-2 border-dashed border-slate-300">
+          <div className="pt-2 border-t border-[#d6e8ff]">
             <p className="text-[11px] text-slate-400 mb-2">↓ 아래는 위 조건 설정과 무관한 참고 지표입니다 (사이트 전체 기간 기준)</p>
           </div>
-          <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50/60 p-4">
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
             <div className="flex items-center gap-2 mb-3">
               <Wind className="w-4 h-4 text-emerald-600" />
               <span className="text-sm font-semibold text-slate-900">AEP 연간 발전량 추정</span>
               <span
-                className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5"
+                className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 inline-flex items-center gap-1"
                 title="이 카드는 위의 '적용기간(3M/6M/12M/커스텀)' 선택과 무관하게 항상 사이트 개설 이후 전체 ch1 데이터로 계산됩니다."
               >
-                ⚠ 항상 전체 기간 기준 (위 적용기간 선택과 무관)
+                <AlertTriangle className="w-3 h-3" /> 항상 전체 기간 기준 (위 적용기간 선택과 무관)
               </span>
             </div>
             {!aepEstimate ? (
